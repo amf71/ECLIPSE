@@ -1311,11 +1311,12 @@ clonal_deconvolution <- function(data, hard_filters = NA, mrd_filters = NA, tree
     #   sample_data <- mulitmodal.corrections(sample_data)
     # }
     
-    clones.detected.q <- sample_data$Clone.detected.q
+    # don't include those with NA ctDNA fractions as these are poor quality clones without a cohesive VAF distribution
+    clones.detected.q <- sample_data[ !is.na(sample_data$ctDNA_fraction), 'Clone.detected.q' ]
     
     if(any(clones.detected.q<0.1 & !is.na(clones.detected.q))){
       
-      detected <- sample_data[sample_data$Clone.detected.q<0.1,]
+      detected <- sample_data[sample_data$Clone.detected.q<0.1 & !is.na(sample_data$ctDNA_fraction),]
       clones.detected <- unique(detected$clone_orig)[ !is.na(unique(detected$clone_orig)) ]
       
       #if all CN fail can have no PyClone
