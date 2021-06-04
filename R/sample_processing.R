@@ -350,11 +350,13 @@ model_subclone <- function(clonalpopmean, CCF, clone_table){
 cn_adjust <- function(supporting_reads, depth, total_cn, multiplicity, ccf, is.Clonal = NA, 
                       return.all.intermediate.calculations = FALSE, cnEVO = FALSE ){
   
-  # plasma CCFs can be sometimes estimated as > 1, impossible hence limit tp 1
+  # CCFs can be sometimes estimated as > 1, impossible hence limit to 1
   ccf[ ccf > 1 ] <- 1
   
+  # estimate the average number of WT copies per cell across the tumour
   Extra.WT.copies <- total_cn - (multiplicity * ccf)
   Extra.WT.copies[ Extra.WT.copies < 0 ] <- 0
+  
   
   if(cnEVO == FALSE){
     
@@ -869,7 +871,7 @@ mulitmodal.corrections <- function(data){
 #' 
 #' @export
 clonal_deconvolution <- function(data, hard_filters = NA, mrd_filters = NA, tree = NA,
-                                 lod_correction = TRUE, test_subsequent_CIN = TRUE,
+                                 lod_correction = TRUE, test_subsequent_CIN = TRUE, min_muts_clone = 2, 
                                  normSD.for.1.sup.mut.clones){
   
   class_origin <- class( data )
@@ -882,12 +884,12 @@ clonal_deconvolution <- function(data, hard_filters = NA, mrd_filters = NA, tree
   
   # calculate VAF
   data[, VAF := supporting_reads / depth]
+
+  # calculate raw mutant CN, equation taken from NEJM TRACERx 100 paper (this is an 
+  # average mut cn per cell across the tumour)
+  data[, mutCPN := (tumour_vaf * (1 / tumour_cellularity)) * ((tumour_cellularity * total_cpn) + 2 * (1 - tumour_cellularity)) ]
   
-  # calculate mutant CN, equation taken from NEJM TRACERx 100 paper
-  data[, mutCPN := tumour_vaf * (1 / tumour_cellularity) * ( tumour_cellularity * total_cpn + 2 * (1 - tumour_cellularity)) ]
-  
-  # calculate number of mutant copies per mutated cell (i/e. mlitplicity of mutation)
-  # mutant CPN is the average Cn across all cells in the tumour
+  # calculate number of mutant copies per mutated cell (i/e. multiplicity of mutation)
   data[, multiplicity := mutCPN / tumour_ccf ]
   
   # multiplicity < 1 is not possible (causes by noise in data) - correct this
@@ -1312,11 +1314,12 @@ clonal_deconvolution <- function(data, hard_filters = NA, mrd_filters = NA, tree
     # }
     
     # don't include those with NA ctDNA fractions as these are poor quality clones without a cohesive VAF distribution
-    clones.detected.q <- sample_data[ !is.na(sample_data$ctDNA_fraction), 'Clone.detected.q' ]
+    # presence / absence of clones based on very few mutations can be unreliable (eg can't assess distrebution well) - parameter here to
+    # only consider mutations with at least a certain number of mutations followed in ctDNA - default is 2
+    detected <- sample_data[sample_data$Clone.detected.q<0.1 & !is.na(sample_data$ctDNA_fraction) & muts_followed_in_clone >= min_muts_clone,]
     
-    if(any(clones.detected.q<0.1 & !is.na(clones.detected.q))){
+    if(any(detected$Clone.detected.q < 0.1 & !is.na(detected$Clone.detected.q))){
       
-      detected <- sample_data[sample_data$Clone.detected.q<0.1 & !is.na(sample_data$ctDNA_fraction),]
       clones.detected <- unique(detected$clone_orig)[ !is.na(unique(detected$clone_orig)) ]
       
       #if all CN fail can have no PyClone
