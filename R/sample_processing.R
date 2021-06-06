@@ -8,7 +8,7 @@
 ### for testing
 # setwd("/Volumes/proj-tracerx-lung/tctProjects/frankella/R_packages/eclipse")
 # setwd("/camp/project/proj-tracerx-lung/tctProjects/frankella/R_packages/eclipse")
-# data <- data.table::fread("data/example_data.csv")
+# data <- data.table::fread("data/example_datacsv")
 # tree <- data.table::fread('data/tree.csv')
 # 
 # normSD.for.1.sup.mut.clones <- 0.77
@@ -154,7 +154,7 @@ mean.estimate.LOD.correction <- function(CN.adj.VAF, MatchedLOD, normSD.est = NA
       tmp[match(CN.adj.VAF,originalmutcells)] <- meanests
       meanests <- tmp
       
-      output <- as.data.frame(cbind(Zscores, onlyonemut, normSDsolution, normSD.var.result, meanests, popmean, UpCI, LwCI))
+      output <- as.dataframe(cbind(Zscores, onlyonemut, normSDsolution, normSD.var.result, meanests, popmean, UpCI, LwCI))
       
       names(output) <- c('zscores', 'is_one_mut', 'normalised_sd', 'mean_est_variance', 
                          'mean_estimate', 'ctDNA_fraction', 'ctDNA_fraction_UpCI', 
@@ -229,7 +229,7 @@ mean.estimate.LOD.correction <- function(CN.adj.VAF, MatchedLOD, normSD.est = NA
     tmp[match(CN.adj.VAF,originalmutcells)] <- meanests
     meanests <- tmp
     
-    output <- as.data.frame(cbind(Zscores, onlyonemut, normSDsolution, normSD.var.result, meanests, popmean, UpCI, LwCI))
+    output <- as.dataframe(cbind(Zscores, onlyonemut, normSDsolution, normSD.var.result, meanests, popmean, UpCI, LwCI))
     
     names(output) <- c('zscores', 'is_one_mut', 'normalised_sd', 'mean_est_variance', 'mean_estimate', 'ctDNA_fraction', 'ctDNA_fraction_UpCI', 'ctDNA_fraction_LwCI' )
     
@@ -282,7 +282,7 @@ mean.estimate.LOD.correction <- function(CN.adj.VAF, MatchedLOD, normSD.est = NA
       
     }
     
-    output <- as.data.frame(cbind(Zscores, onlyonemut, normSDsolution, normSD.var.result, meanests, popmean, UpCI, LwCI))
+    output <- as.dataframe(cbind(Zscores, onlyonemut, normSDsolution, normSD.var.result, meanests, popmean, UpCI, LwCI))
     
     names(output) <- c('zscores', 'is_one_mut', 'normalised_sd', 'mean_est_variance', 'mean_estimate', 'ctDNA_fraction', 'ctDNA_fraction_UpCI', 'ctDNA_fraction_LwCI' )
     
@@ -368,18 +368,15 @@ cn_adjust <- function(supporting_reads, depth, total_cn, multiplicity, ccf, is.C
     
   }
   
-  # #reads.per.mutCN should be equal accross clones - average accross (allow better calculations when looks like subsequent amplification has occured)
-  # if(!is.na(is.Clonal)){
-  # reads.per.totalMutCPN <- sapply(1:length(reads.per.totalMutCPN), function(i) median(reads.per.totalMutCPN[is.Clonal],na.rm = T))
-  # }
-  
   WT.tumour.reads <- Extra.WT.copies * reads.per.totalMutCPN
   
-  #don't allow moree WT reads than depth-(mutCN * varount) - this suggests you are underestimating the number of MT copies (has theere been an amplification?)
+  #don't allow more WT reads than depth-(mutCN * varount) - this suggests you 
+  #are underestimating the number of MT copies (has there been an amplification?)
   WT.overest <- WT.tumour.reads > (depth - (supporting_reads / multiplicity)) & !is.na(WT.tumour.reads)
   WT.tumour.reads[ WT.overest ] <- (depth - (supporting_reads / multiplicity))[ WT.overest ]
+  poss_amplification <- WT.overest
   
-  mut.Cell.no.WT.Tumour.DNA.correction <- (supporting_reads / multiplicity) / (depth + supporting_reads)
+  CN.adj.vaf.no.WT.Tumour.DNA.correction <- (supporting_reads / multiplicity) / (depth + supporting_reads)
   
   #calculate "cellularity" by getting VAF per cell (/Mtcopies) and deviding this by VAF signal from normal cells
   Corrected.Depth.2tumour.copies <- (depth - (reads.per.totalMutCPN * (2 - multiplicity)) - WT.tumour.reads)
@@ -400,7 +397,8 @@ cn_adjust <- function(supporting_reads, depth, total_cn, multiplicity, ccf, is.C
                  WT.tumour.reads,
                  Corrected.Depth.2tumour.copies,
                  Corrected.Depth.1tumour.copy,
-                 mut.Cell.no.WT.Tumour.DNA.correction))
+                 CN.adj.vaf.no.WT.Tumour.DNA.correction,
+                 poss_amplification))
     
   } else {
     
@@ -427,7 +425,7 @@ sumlog <- function(p) {
 
 correct.specific.ps <- function(table,field.to.deduplicate=NA,field.to.correct, indices.to.correct = "all",method ="BH"){
   
-  table <- as.data.frame(table)
+  table <- as.dataframe(table)
   
   if(all(indices.to.correct =="all")){
     indices.to.correct <- rep(TRUE,nrow(table))
@@ -618,7 +616,7 @@ mulitmodal.corrections <- function(data){
     mean.Perc.change.next <- c()
     mean.Perc.change.record <-  c()
     
-    sample_data.constant <- sample_data
+    sample_dataconstant <- sample_data
     i <- 0
     
     root <- find_root( tree )
@@ -628,7 +626,7 @@ mulitmodal.corrections <- function(data){
       
       i <- i + 1
       
-      sample_data <- sample_data.constant
+      sample_data <- sample_dataconstant
       
       CN.adj.VAF.outputs <- cn_adjust( supporting_reads = sample_data$reads_no_background, 
                                        depth = sample_data$depth, 
@@ -864,6 +862,199 @@ mulitmodal.corrections <- function(data){
 }
 
 
+#' Function to remove the number of estimated supporting reads which derive from
+#' background sequencing niose for groups of mutations (in this case clones)
+#' @export
+remove_background_reads <- function( data., niose_col = 'background_error',
+                                     filter_col = 'hard_filtered', support_col = 'supporting_reads',
+                                     depth_col = 'depth', group_max = 4, mutid_col = 'mutation_id'){
+  
+  # Order by this - then don't need randomisation in sampling and this is deterministic & reproducible
+  data. <- data.[ order(get(mutid_col)) ] 
+  
+  # mutations to ignore throughout
+  ignore_i <- data.[, get(filter_col) ]
+  
+  # If all mutations are invaluable then return with NA
+  if(all(ignore_i)){
+    data.[, `:=`(group = NA,
+                 supporting_reads_no_niose = NA) ]
+    return(data.)
+  } 
+  
+  # Determine the number of groups so that each group has enough mutations
+  # that if the niose was distrebuted evenly each group would have at least 1
+  # read of niose - max of 4 groups
+  total_niose <- data.[ !ignore_i , floor( sum( get(niose_col) * get(depth_col) ) )]
+  group_num = total_niose
+  if( group_num > group_max ) group_num = group_max
+  if( group_num == 0 ) group_num = 1
+  
+  # Now cluster mutations based on background noise 
+  data.[ !ignore_i, group := ifelse( .N > 1, kmeans(data.[ !ignore_i, get(niose_col)], group_num)$cluster, 1) ]
+  groups <- data.[ !is.na(group), unique(group)]
+  
+  group_read_to_remove <- lapply(groups, function(group_name){
+    background.lambda <- data.[ group == group_name, mean(get(niose_col) * get(depth_col)) ]
+    max.read.support.to.test <- round( background.lambda * 100 )
+    reads.to.remove <- round( dpois(1:max.read.support.to.test, lambda = background.lambda) * data.[ group == group_name, .N] )
+    names(reads.to.remove) <- 1:max.read.support.to.test
+    out <- reads.to.remove[ !reads.to.remove == 0 ] 
+    if(length(out) == 0) out <- NA
+    return( out )
+  } )
+  
+  names(group_read_to_remove) <- groups
+
+  subtract_reads <- function( reads, reads.to.remove ){
+    #if no reads to remove return read unaltered
+    if( all(is.na(reads.to.remove)) ) return(reads)
+    
+    # record which mutations have already had niose removed 
+    # (only do this once to each mutation)
+    already_subtracted = FALSE
+    reads <- data.table( reads, already_subtracted)
+    
+    #if no reads to remove return read unaltered
+    if( all(is.na(reads.to.remove)) ) return(reads)
+    
+    # Loop around each read number which needs removing
+    for( read_num in rev( names(reads.to.remove) ) ){
+
+      if( all(reads$reads == 0) ) return(reads$reads)
+      
+      # which mutations have enough reads that we could remove the desired number
+      reads[, is_eligible := reads >= read_num ]
+      posiblei <- reads[, which(is_eligible & !already_subtracted) ]
+      
+      # If few mutations available then need to remove and spread the reads to lower read numbers
+      # to lower numbers
+      if(length(posiblei) < reads.to.remove[read_num] ){
+        
+        # We still have excess at 0 this means there are more background estimated reads than
+        # observed reads - return no support for all mutations
+        if(read_num == '1') return( rep(0, nrow(reads)) )
+        
+        # work out how we distribute the excess - use the next number below first then add any remainder
+        num_excess <- reads.to.remove[read_num] - length(posiblei)
+        reads_excess <- num_excess * as.numeric(read_num)
+        read_num_below <- as.numeric(read_num) - 1 
+        read_num_below_add <- floor( reads_excess / read_num_below)
+        remainder <- reads_excess %% read_num_below
+        if( any(names(reads.to.remove) == as.character(read_num_below)) ){
+          reads.to.remove[[ as.character(read_num_below) ]] <- reads.to.remove[[ as.character(read_num_below) ]] + read_num_below_add
+        } else {
+          reads.to.remove[[ as.character(read_num_below) ]] <- read_num_below_add
+          reads.to.remove <- reads.to.remove[ order( as.numeric(names(reads.to.remove)))]
+        }
+        if( remainder > 0 ){
+          if( any(names(reads.to.remove) == as.character(remainder)) ){
+            reads.to.remove[[ as.character(remainder) ]] <- reads.to.remove[[ as.character(remainder) ]] + 1
+          } else {
+            reads.to.remove[[ as.character(remainder) ]] <- 1
+            reads.to.remove <- reads.to.remove[ order( as.numeric(names(reads.to.remove)))]
+          }
+        }
+        
+        # Now we've redistributed the excess remove the excess
+        reads.to.remove[read_num] = length(posiblei)
+      }
+      #if no possible mutations to add just skip to the next level
+      if( length(posiblei) == 0 ) next
+      
+      # Randomly select the mutations for which read are to be removed 
+      # and mark so this only occurs once per mutation
+      # don't use sample/runif - just select the first X - as we order by sample then mutation id this
+      # should make it deterministic
+      selectedi <-posiblei[ 1:reads.to.remove[read_num] ]
+      reads[selectedi, already_subtracted := TRUE ]
+      reads[selectedi, reads := reads - as.numeric(read_num) ]
+    }
+    return( reads$reads )
+  }
+  
+  data.[ !ignore_i, 
+         supporting_reads_no_niose := subtract_reads( get(support_col), group_read_to_remove[[.GRP]]), 
+         by = group ]
+  
+  return(data.)
+  
+}
+
+#' Function to annotate in each clone mutations which mutations are unsupported
+#' because of a low limit of detection (LOD) ie the depth is too low or the mutation 
+#' copy is lower than other mutations etc
+#' This is used when modelling the distbution including the unobserved variants
+#' @export
+annotate_low_LOD <- function( data., niose_col = 'background_error', LOD_col = 'LOD',
+                              filter_col = 'hard_filtered', support_col = 'supporting_reads',
+                              depth_col = 'depth', mutid_col = 'mutation_id'){
+  
+  # mutations to ignore throughout
+  ignore_i <- data.[, get(filter_col) | is.na(get(LOD_col)) ]
+  
+  if( data.[ !ignore_i, all(get(support_col) > 0) ] ) return(data.)
+  
+  # get the median LOD for mutations that have read support
+  medianLOD_supported <- data.[ !ignore_i & get(support_col) > 0, median(get(LOD_col)) ]
+  
+  # get the median of the unsupported variants while removing one at a time
+  unsupported_lod <- data.[ !ignore_i & get(support_col) == 0, get(LOD_col) ]
+  unsupported_lod <- unsupported_lod[ order(unsupported_lod, decreasing = TRUE) ]
+  median_lod_unsupported_range <- sapply( 1:length(unsupported_lod), function(i) median(unsupported_lod[i:length(unsupported_lod)]) )
+  
+  # how many unsupported variants to discount
+  diff <- abs(median_lod_unsupported_range - unsupported_lod )
+  num_supported_to_remove <- which( diff == min(diff) )
+  mutids_to_remove <- data.[ get(support_col) == 0 ][ order(get(LOD_col), decreasing = TRUE), get(mutid_col) ][ 1:num_supported_to_remove ]
+  
+  # assign this to LOD unmatched
+  data.[, matched_lod := TRUE ]
+  data.[ get(mutid_col) %in% mutids_to_remove, matched_lod := FALSE ]
+  
+  return(data.)
+}
+
+#' Function to calculate CCFs from vaf, purity and cn as in ABSOLUTE
+#' @export
+calculate_ccfs <- function( data., purity, varcount_col = 'supporting_reads', depth_col = 'depth', 
+                           tumour_totalCN_col = 'total_cpn', normal_totalCN_col = normal_totalCN ){
+  
+  calculate_ccf <- function(varcount, depth, purity, tumour_totalCN, normal_totalCN ){
+  
+    ccf_est <- function (vaf, purity, tumour_totalCN, normal_totalCN){
+    return(min(1,c((purity*vaf) / (normal_totalCN*(1-purity) + purity*tumour_totalCN))))
+  }
+  
+  test_vafs <- c( seq(0.0001, 0.001, 0.0001), seq(0.001, 0.01, 0.001), seq(0.01, 1, 0.01) )
+  binom_dist    <- dbinom(n.alt,depth, prob=sapply(test_vafs, ccf_est, purity, local.copy.number, normal.copy.number ))
+  names(x) <- test_vafs
+  
+  if(min(binom_dist)==0) x[length(x)] <- 1
+  
+  
+  sub.cint <- function(x, prob = 0.95,n.alt,depth) {
+    xnorm   <- x/sum(x)
+    xsort   <- sort(xnorm, decreasing = TRUE)
+    xcumLik <- cumsum(xsort)
+    n = sum(xcumLik < prob) + 1
+    LikThresh <- xsort[n]
+    cint  <- x[xnorm >= LikThresh]
+    all   <- as.numeric(names(x))
+    cellu <- as.numeric(names(cint))
+    l.t   <- cellu[1]
+    r.t   <- cellu[length(cellu)]
+    m     <- cellu[which.max(cint)]
+    
+    prob.subclonal <- sum(xnorm[1:90])# 1-prop.test(n.alt,depth,p=f.function(1,purity,local.copy.number),alternative='less')$p.val
+    prob.clonal    <- sum(xnorm[91:100]) # 1-prop.test(n.alt,depth,p=f.function(1,purity,local.copy.number),alternative='greater')$p.val
+    
+    data.frame(left = l.t, est = m, right = r.t,prob.subclonal=prob.subclonal,prob.clonal=prob.clonal)
+  }
+  
+  return(sub.cint(x,n.alt=n.alt,depth=depth))
+  }
+}
 
 #' Clonal deconvolution function
 #' 
@@ -878,9 +1069,25 @@ clonal_deconvolution <- function(data, hard_filters = NA, mrd_filters = NA, tree
   data <- as.data.table( data )
   
   
+  # make a mutation id
+  data[, mutation_id := paste( sample_id, chr, pos, alt, sep = ":" ) ]
+  
   # allow to run for multiple samples if inputted as 1 data table
   data[, clone_orig := clone ]
   data[, clone := paste( sample_id, clone, sep = "_") ]
+  
+  # work out which mutations are good for MRD and which should be removed altogether
+  data[, hard_filtered := grepl( paste( hard_filters, collapse = "|" ), error_filter ) | is.na(background_error) ]
+  data[, mrd_filtered := grepl( paste( mrd_filters, collapse = "|" ), error_filter ) | is.na(background_error) ]
+  if( all( is.na(hard_filters) ) )  data[, hard_filtered := FALSE ]
+  if( all( is.na(mrd_filters) ) )  data[, mrd_filtered := FALSE ]
+  
+  # if no background info hard filter
+  data[ is.na(background_error), hard_filtered := TRUE ]
+  
+  # filter background niose reads
+  data <- rbindlist( lapply(data[, unique(clone) ], function(clone_name) remove_background_reads(data[ clone == clone_name ]) ) )
+  
   
   # calculate VAF
   data[, VAF := supporting_reads / depth]
@@ -898,152 +1105,18 @@ clonal_deconvolution <- function(data, hard_filters = NA, mrd_filters = NA, tree
   # assign all mutations as matched LOD for now - will use this later
   data$matched_lod <- TRUE
   
-  # work out which mutations are good for MRD and which should be removed altogether
-  data[, hard_filtered := grepl( paste( hard_filters, collapse = "|" ), error_filter ) ]
-  data[, mrd_filtered := grepl( paste( mrd_filters, collapse = "|" ), error_filter ) ]
-  if( all( is.na(hard_filters) ) )  data[, hard_filtered := FALSE ]
-  if( all( is.na(mrd_filters) ) )  data[, mrd_filtered := FALSE ]
-  
-  # if no background info hard filter
-  data[ is.na(background_error), hard_filtered := TRUE ]
-  
   # calculate the limit of detection for each variant based on cellularity that = 1 supporting read
   # will only compare LOD within a clone so CCF can be any value here
   data[, LOD := cn_adjust( supporting_reads = 1 , depth, total_cpn, multiplicity, ccf = 1 ) ]
   
-  # calculate expect number of reads given background noise
-  data[, background_reads := background_error * depth ]
-  
-  # make new column for supporting read but excluding the noise
-  data[, reads_no_background := supporting_reads ]
-  
-  # make a mutation id
-  data[, mutation_id := paste( sample_id, chr, pos, alt, sep = ":" ) ]
-  
-  data <- do.call( rbind, lapply( data[, unique(clone) ], function( clone_name ){
-    
-    clone_table <- data[ clone %in% clone_name ]
-    
-    if( is.na(clone_name) ) return( clone_table )
-    
-    groups <- clone_table[ hard_filtered == FALSE , unique( error_group ) ]
-    groups <- groups[ !is.na(groups) ]
-    
-    ##identify mutations to remove to account for background noise when calculating CCFs
-    for( group in groups ){
-      
-      # make groups so that each clone has enough mutations # TO DO
-      
-      group_i <- clone_table[, error_group %in% group & hard_filtered == FALSE ]
-      
-      group_mut_num <- sum(group_i)
-      
-      background.lambda <- clone_table[ group_i, mean(background_reads) ]
-      max.read.support.to.test <- round( background.lambda * 100 )
-      reads.to.remove <- round( dpois(1:max.read.support.to.test, lambda = background.lambda) * group_mut_num )
-      names(reads.to.remove) <- 1:max.read.support.to.test
-      reads.to.remove <- factor( reads.to.remove[ !reads.to.remove == 0 ], levels = 1:group_mut_num)
-      
-      if(length(reads.to.remove)>0){
-        
-        mutidsnotcorrected <- clone_table[ !supporting_reads == 0 &
-                                             group_i, "mutation_id"]
-        
-        for(background in rev(names(reads.to.remove))){
-          eliablemuts <- clone_table[ group_i &
-                                        supporting_reads >= as.numeric(background) &
-                                        mutation_id %in% mutidsnotcorrected, 
-                                       mutation_id ]
-          
-          if(length(eliablemuts) == 0){
-            if(background>1){
-              reads.to.add <- as.numeric(background) * as.numeric(reads.to.remove[names(reads.to.remove)==background])
-              leveldown <- names(reads.to.remove)[which(names(reads.to.remove)== background)-1]
-              reads.to.remove[leveldown] <- as.numeric(reads.to.remove[leveldown]) + floor(reads.to.add/as.numeric(names(reads.to.remove[leveldown])))
-              reads.to.carry.over <- reads.to.add %% as.numeric(names(reads.to.remove[leveldown]))
-              for(i in rev(names(reads.to.remove)[1:(length(reads.to.remove))])){
-                if(reads.to.carry.over == 0){
-                  break
-                }
-                reads.to.remove[i] <- reads.to.remove[i] + floor(reads.to.carry.over/as.numeric(names(reads.to.remove[i])))
-                reads.to.carry.over <- reads.to.carry.over %% as.numeric(names(reads.to.remove[i]))
-              }
-            }
-            next
-          }
-          if(length(eliablemuts) >= as.numeric(reads.to.remove[names(reads.to.remove) %in% background])){
-            chosen <- eliablemuts[runif(reads.to.remove[names(reads.to.remove) %in% background], 1, length(eliablemuts))]
-            mutidsnotcorrected <- mutidsnotcorrected[!mutidsnotcorrected %in% chosen]
-            clone_table[ mutation_id %in% chosen, reads_no_background := supporting_reads - as.numeric(background) ]
-            
-          } else {
-            
-            mutidsnotcorrected <- mutidsnotcorrected[!mutidsnotcorrected %in% eliablemuts]
-            clone_table[ mutation_id %in% eliablemuts, reads_no_background := supporting_reads - as.numeric(background) ]
-            
-            if(background>1){
-              
-              reads.to.add <- as.numeric(background) * (as.numeric(reads.to.remove[names(reads.to.remove)==background]) - length(eliablemuts))
-              leveldown <- names(reads.to.remove)[which(names(reads.to.remove)== background)-1]
-              reads.to.remove[leveldown] <- reads.to.remove[leveldown] + floor(reads.to.add/as.numeric(names(reads.to.remove[leveldown])))
-              reads.to.carry.over <- reads.to.add %% as.numeric(names(reads.to.remove[leveldown]))
-              for(i in rev(names(reads.to.remove)[1:(length(reads.to.remove))])){
-                if(reads.to.carry.over == 0){
-                  break
-                }
-                reads.to.remove[i] <- reads.to.remove[i] + floor(reads.to.carry.over/as.numeric(names(reads.to.remove[i])))
-                reads.to.carry.over <- reads.to.carry.over %% as.numeric(names(reads.to.remove[i]))
-              }
-            }
-          }
-        }
-      }
-    }
-    
-    if(lod_correction == TRUE){
-      
-      #Highlight unsupported muts which can be removed in further analysis so they are not biased by LOD
-      if( clone_table[, sum( supporting_reads == 0 & !is.na(LOD) & hard_filtered == FALSE ) > 0 ] ){
-        
-        medianSuportedLOD <- clone_table[supporting_reads > 0 & hard_filtered == FALSE, median(LOD, na.rm = T) ]
-        iteration <- 1
-        
-        repeat{
-          
-          if(!iteration == 1) oldLODsdiff <- LODsdiff
-          
-          clone_table.unsupported <- clone_table[ matched_lod == TRUE & !is.na(LOD) & supporting_reads == 0  & hard_filtered == FALSE ]
-          maxLODunsupportedmut <- clone_table.unsupported[ LOD == clone_table.unsupported[ hard_filtered == FALSE, max( LOD ,na.rm = T) ], mutation_id ] 
-          
-          clone_table[ mutation_id %in% maxLODunsupportedmut, matched_lod := FALSE ]
-          
-          medianUnsuportedLOD <- clone_table[ supporting_reads == 0 & matched_lod %in% 'TRUE' & !is.na(LOD) & hard_filtered == FALSE,  median( LOD, na.rm = T) ]
-          
-          LODsdiff <- medianUnsuportedLOD - medianSuportedLOD
-          
-          iteration <- iteration + 1
-          
-          if( is.na(LODsdiff) ) LODsdiff <- -1
-          
-          #when you've removed enough unsupported muts so LODunsupported is less than LODsupported then check whether they would be more similar
-          #had you kept the previous mut and if so restore it
-          #also if no more unsupported muts left
-          if( !any( clone_table[, !supporting_reads == 0 & matched_lod == TRUE & !is.na(LOD) & hard_filtered == FALSE ] ) || LODsdiff < 0 ) {
-            
-            break
-            
-          }
-        }
-      }
-    } 
-    return( clone_table )
-  } ))
-  
+  # Annotate which variants in each clones that appear to be unsupported becuase of
+  # a low LOD
+  if(lod_correction == TRUE){
+    data <- rbindlist( lapply(data[, unique(clone) ], function(clone_name) annotate_low_LOD(data[ clone == clone_name ]) ) )
+  }
   
   ##### Calculate ctDNA cellularity accounting for mutCPN, WT cancer copies #####
-  
-  datasave <- data
-  data <- datasave
+
   
   data <- do.call( rbind, lapply( data[, unique( sample_id) ], function( sample ){
     
@@ -1071,7 +1144,7 @@ clonal_deconvolution <- function(data, hard_filters = NA, mrd_filters = NA, tree
     mean.Perc.change.next <- c()
     mean.Perc.change.record <-  c()
     
-    sample_data.constant <- sample_data
+    sample_dataconstant <- sample_data
     i <- 0
     
     root <- find_root( tree )
@@ -1081,7 +1154,7 @@ clonal_deconvolution <- function(data, hard_filters = NA, mrd_filters = NA, tree
       
       i <- i + 1
       
-      sample_data <- sample_data.constant
+      sample_data <- sample_dataconstant
       
       CN.adj.VAF.outputs <- cn_adjust( supporting_reads = sample_data$reads_no_background, 
                                        depth = sample_data$depth, 
