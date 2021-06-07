@@ -993,7 +993,10 @@ annotate_low_LOD <- function( data., niose_col = 'background_error', LOD_col = '
   # mutations to ignore throughout
   ignore_i <- data.[, get(filter_col) | is.na(get(LOD_col)) ]
   
-  if( data.[ !ignore_i, all(get(support_col) > 0) ] ) return(data.)
+  if( data.[ !ignore_i, all(get(support_col) > 0) ] ){
+    data.[, matched_lod := NA ]
+    return(data.)
+  } 
   
   # get the median LOD for mutations that have read support
   medianLOD_supported <- data.[ !ignore_i & get(support_col) > 0, median(get(LOD_col)) ]
@@ -1017,44 +1020,236 @@ annotate_low_LOD <- function( data., niose_col = 'background_error', LOD_col = '
 
 #' Function to calculate CCFs from vaf, purity and cn as in ABSOLUTE
 #' @export
-calculate_ccfs <- function( data., purity, varcount_col = 'supporting_reads', depth_col = 'depth', 
-                           tumour_totalCN_col = 'total_cpn', normal_totalCN_col = normal_totalCN ){
+calculate_ccfs <- function( data., out_col_name = 'ccf', purity = NA, purity_col = 'purity', varcount = NA,
+                            varcount_col = 'supporting_reads', depth_col = 'depth', 
+                            tumour_totalCN_col = 'total_cpn', normal_totalCN = NA, 
+                            normal_totalCN_col = 'total_cpn_norm', mutid_col = 'mutation_id', 
+                            sample_id_col = 'sample_id', multiplicity_col = 'multiplicity' ){
   
-  calculate_ccf <- function(varcount, depth, purity, tumour_totalCN, normal_totalCN ){
+  if( is.na(purity) ) purity <- data.[, unique(get(purity_col)) ]
+  if( !is.na(varcount) ){
+    varcount_col <- 'varcount_temp'
+    data.[, varcount_temp := varcount ]
+  } 
+  if( !is.na(normal_totalCN) ){
+    normal_totalCN_col <- 'normal_cn_temp'
+    data.[, normal_cn_temp := normal_totalCN ]
+  } 
   
-    ccf_est <- function (vaf, purity, tumour_totalCN, normal_totalCN){
-    return(min(1,c((purity*vaf) / (normal_totalCN*(1-purity) + purity*tumour_totalCN))))
-  }
-  
-  test_vafs <- c( seq(0.0001, 0.001, 0.0001), seq(0.001, 0.01, 0.001), seq(0.01, 1, 0.01) )
-  binom_dist    <- dbinom(n.alt,depth, prob=sapply(test_vafs, ccf_est, purity, local.copy.number, normal.copy.number ))
-  names(x) <- test_vafs
-  
-  if(min(binom_dist)==0) x[length(x)] <- 1
-  
-  
-  sub.cint <- function(x, prob = 0.95,n.alt,depth) {
-    xnorm   <- x/sum(x)
-    xsort   <- sort(xnorm, decreasing = TRUE)
-    xcumLik <- cumsum(xsort)
-    n = sum(xcumLik < prob) + 1
-    LikThresh <- xsort[n]
-    cint  <- x[xnorm >= LikThresh]
-    all   <- as.numeric(names(x))
-    cellu <- as.numeric(names(cint))
-    l.t   <- cellu[1]
-    r.t   <- cellu[length(cellu)]
-    m     <- cellu[which.max(cint)]
+
+  calculate_ccf <- function(varcount, depth, purity, tumour_totalCN, normal_totalCN, multiplicity ){
     
-    prob.subclonal <- sum(xnorm[1:90])# 1-prop.test(n.alt,depth,p=f.function(1,purity,local.copy.number),alternative='less')$p.val
-    prob.clonal    <- sum(xnorm[91:100]) # 1-prop.test(n.alt,depth,p=f.function(1,purity,local.copy.number),alternative='greater')$p.val
+    # When using int_cn from multimodel correct some mutations are 'amp' as the 
+    # class is character. Supress warning for when 'amp' (want this to be NA)
+    tumour_totalCN <- as.numeric(tumour_totalCN)
+    varcount <- as.numeric(varcount) 
+    depth <- as.numeric(depth) 
+    purity <- as.numeric(purity) 
+    normal_totalCN <- as.numeric(normal_totalCN) 
+    multiplicity <- suppressWarnings( as.numeric(multiplicity) )
     
-    data.frame(left = l.t, est = m, right = r.t,prob.subclonal=prob.subclonal,prob.clonal=prob.clonal)
+    out_col_names <- c(out_col_name, paste0(out_col_name, '_lci'), paste0(out_col_name, '_hci'))
+    
+    if( any(is.na(c(varcount, depth, purity, tumour_totalCN, normal_totalCN))) ){
+      out <- data.table( col1 = NA, col2 = NA, col3 = NA )
+      setnames(out, out_col_names)
+      return( out ) 
+    }
+    
+    ccf_est <- function(vaf, purity, tumour_totalCN, normal_totalCN, multiplicity){
+      return(min(1,((purity*vaf) / (normal_totalCN*(1-purity) + purity*tumour_totalCN)) / multiplicity))
+    }
+    
+    test_vafs <- seq(0.00001, 1, 0.00001)
+    
+    ceiling_tumour_totalCN <- floor( 1/((varcount / depth) / purity) * multiplicity ) 
+    tumour_totalCN <- min(ceiling_tumour_totalCN, tumour_totalCN)
+
+    binom_dist    <- dbinom(varcount, depth, prob = sapply(test_vafs, ccf_est, purity, 
+                                                           tumour_totalCN, normal_totalCN, 
+                                                           multiplicity))
+    names(binom_dist) <- test_vafs
+    
+    sub.cint <- function(binom_dist, prob = 0.95, varcount, depth, multipilcity){
+      xnorm   <- binom_dist / sum(binom_dist)
+      xsort   <- sort(xnorm, decreasing = TRUE)
+      xcumLik <- cumsum(xsort)
+      n <- sum(xcumLik < prob) + 1
+      LikThresh <- xsort[n]
+      cint  <- binom_dist[ xnorm >= LikThresh ]
+      all   <- as.numeric(names(binom_dist))
+      cellu <- as.numeric(names(cint))
+      l.t   <- cellu[1]
+      r.t   <- cellu[ length(cellu) ]
+      m     <- cellu[ which.max(cint) ]
+      
+      # normal absolute method doesn't account for multiplicity
+      out <- data.table( col1 = m / multiplicity, 
+                         col2 = l.t / multiplicity, 
+                         col3 = r.t / multiplicity)
+      setnames(out, out_col_names)
+      
+      return( out ) 
+    }
+    
+    return( sub.cint(binom_dist, varcount = varcount, depth = depth, multipilcity = multipilcity) )
+    
   }
   
-  return(sub.cint(x,n.alt=n.alt,depth=depth))
+  ccfs <- rbindlist( lapply(1:data.[, .N], function(i) data.[i, calculate_ccf( get(varcount_col), get(depth_col), purity, 
+                                                                 get(tumour_totalCN_col), get(normal_totalCN_col), 
+                                                                 get(multiplicity_col)) ] ) )
+  data. <- cbind( data., ccfs )
+  
+  ## Check if there is a multi-modal distribution - suggesting that a new clone
+  ## has come to dominate the sample with significant CIN
+  data. <- correct_new_CIN( data. )
+  
+  # recalculate ccf based on new if multimodal
+  if( data.[, unique(is_multimodel) ] ){
+    ccfs <- rbindlist( lapply(1:data.[, .N], function(i) data.[i, calculate_ccf( get(varcount_col), get(depth_col), purity, 
+                                                                                 get(tumour_totalCN_col), get(normal_totalCN_col), 
+                                                                                 int_multiplicity) ] ) )
+    data.[, (out_col_names)] <- ccfs
   }
+  
+  # remove temp cols if they was used
+  if( any(names(data.) == 'varcount_temp') ) data.[, varcount_temp := NULL ]
+  if( any(names(data.) == 'normal_cn_temp') ) data.[, normal_cn_temp := NULL ]
+  
+  return( data. )
+  
 }
+
+#' Function to calculate CCFs from vaf, purity and cn as in ABSOLUTE
+#' Allow either a purity or a purity column as input and same for varcount
+#' @export
+correct_new_CIN <- function( data., varcount_col = 'supporting_reads', depth_col = 'depth', 
+                             tumour_totalCN_col = 'total_cpn', normal_totalCN_col = normal_totalCN,
+                             mutid_col = 'mutation_id', sample_id_col = 'sample_id', multimodal_p_thes = 0.01,
+                             LOD_col = 'LOD', background_reads_col = 'background_error', filter_col = 'hard_filtered'){
+  
+  # mutations to ignore throughout
+  ignore_i <- data.[, get(filter_col) | is.na(get(tumour_totalCN_col)) ]
+  
+  # p value can be outputted as 0 but actually the limit is actually e-14
+  mulit_modal_p_cn1 <- ifelse(.N < 2, NA, data.[ !ignore_i & multiplicity < 1.5, max(1e-14, dip.test(ccf)$p.value) ] )
+  mulit_modal_p_cn2 <- ifelse(.N < 2, NA, data.[ !ignore_i & multiplicity > 1.5, max(1e-14, dip.test(ccf)$p.value) ] )
+  p_values <- c(mulit_modal_p_cn1, mulit_modal_p_cn2)
+  p_values <- p_values[ !is.na(p_values) ]
+  if(length(p_values) == 0) p_values <- NA
+  mulit_modal_p <- ifelse( length(p_values) > 1, sumlog(c(p_values[1], p_values[2]))$p, p_values )
+  data.[, mulit_modal_p := mulit_modal_p ]
+
+  is_multimodel <- mulit_modal_p < multimodal_p_thes & !is.na(mulit_modal_p)
+  data.[, is_multimodel := is_multimodel ]
+  
+  if( !is_multimodel ){
+    data.[ !ignore_i, `:=`(int_multiplicity = ifelse( multiplicity < 2.5, 
+                                                      ifelse(multiplicity > 1.5, 2, 1), 
+                                                      'amp'),
+                           int_multiplicity_preCIN = NA,
+                           cn_change = NA,
+                           new_clone_ccf = NA)]
+    return( data. )
+  } 
+  
+  # If the data is multimodel this suggest the CN of many mutations has changed
+  # This must be because a new clone has come to dominate the sample and this
+  # clone must have had many CN changes
+  
+  data.[, old_multiplicity := multiplicity ]
+  
+  ccfs_lod <- data.[ ignore_i, ifelse(ccf > 0, ccf, get(LOD_col) ) ]
+  int_multip_old <- data.[ ignore_i, ifelse(multiplicity > 1.5, 2, 1) ]
+  
+  BIC <- mclustBIC(ccfs_lod)
+  mode1 <- Mclust(ccfs_lod, x = BIC)
+  classification <- mode1$classification
+  classes <- unique(classification)
+  class_ccf <- sapply(classes,function(x) 10^mean(log10(ccfs_lod[classification==x])))
+  names(class_ccf) <- classes
+  
+  # are either classes not signifcantly different from backgroound?
+  class.positive <-  sapply(classes, function(class){
+    supporting_reads <- data.[ (!ignore_i), get(varcount_col) ][ classification == class ]
+    Expected <- data.[ (!ignore_i), get(background_reads_col) ][ classification == class ]
+    result <- poisson.test(sum(supporting_reads),sum(Expected),alternative = "greater")$p.value
+    out <- result < 0.01
+    return(out)
+  })
+  names(class.positive) <- classes
+  
+  # Now work out what the new CN is
+  int_multip_new <- int_multip_old
+  
+  if(sum(!class.positive)==0){
+    
+    nmuts <- sapply(classes,function(class) sum( classification==class ) )
+    class.1mutcpn.perc <- sapply(classes,function(class) sum(int_multip_old[classification==class]==1,na.rm = T)/sum(classification==class))
+    
+    #cluster of 1 copy should be one of the top 2 clusers with the most muts and the one of these with the most 1 cp original muts
+    classcp1 <- classes[ order(nmuts,decreasing=T)[1:2] ]
+    classcp1 <- classcp1[class.1mutcpn.perc[ classes %in% classcp1 ] == max(class.1mutcpn.perc[ classes %in% classcp1 ] )]
+    
+    #if they both have the same number of 1 muts (no WGD eg) should be deletions and cp1 hence 1cp is the higher VAF cluster
+    if(length(classcp1)>1){
+      classcp1 <- classcp1[class_ccf[classes %in% classcp1] %in% max(class_ccf[unique(mode1$classification) %in% classcp1])]
+      int_multip_new[classification==classes[classes==classcp1]] <- 1
+    }
+    
+    #now we've got CN 1 then CN 2 must be one above in VAF
+    classes.vaf.ordered <- classes [ order(class_ccf, decreasing = F) ]
+    classcp2 <- classes.vaf.ordered[ which( classes.vaf.ordered == classcp1 ) + 1 ]
+    if( !is.na(classcp2) ){
+      int_multip_new[classification == classcp2 ] <- 2
+      
+      if(!classcp2 == classes.vaf.ordered[ length(classes.vaf.ordered) ]){
+        classcpamp <- classes.vaf.ordered[ which( classes.vaf.ordered == classcp2 ):length(classes.vaf.ordered) ]
+        int_multip_new[classification %in% classcpamp ] <- "amp"
+      }
+      
+    }
+    
+    # Now get the mutations that have been lost
+    if(!classcp1 == classes.vaf.ordered[1]){
+      classcp0 <- classes.vaf.ordered[ 1:which( classes.vaf.ordered == classcp1 ) - 1 ]
+      
+      int_multip_new[classification %in% classcp0 ] <- 0
+      
+      cn1ccf_new <- as.numeric(class_ccf[names(class_ccf) %in% classcp1] - class_ccf[names(class_ccf) %in% classcp0])
+      cn1ccf_old <- 10^mean(log10(VAFs[classification==classcp0] / int_multip_old [classification==classcp0])) ##might need to remove background niose from 0
+      new.clone.CCF <- 1 - (cn1ccf_old / cn1ccf_new)
+    } else new.clone.CCF = NA
+  
+  } else {
+    
+    positive.classes <- classes[class.positive]
+    positive.classes <- positive.classes[order(positive.classes)]
+    positive.classes.newCN <- 1:length(positive.classes)
+    positive.classes.newCN[positive.classes.newCN>2] <- "amp"
+    int_multip_new[classification %in% positive.classes] <- positive.classes.newCN[match(classification[classification %in% positive.classes],positive.classes)]
+    int_multip_new[!classification %in% positive.classes] <- 0
+    
+    # If no remaining evidence of lost mutations then new clone must be
+    # completely dominant
+    new.clone.CCF = 1
+    
+  }
+   
+  int_multip_new_copy <- int_multip_new
+  int_multip_new_copy[int_multip_new_copy=="gain"] <- 3
+  CN.change <- as.numeric(int_multip_new_copy) - as.numeric(int_multip_old)
+  
+  data.[ !ignore_i, `:=`(int_multiplicity = int_multip_new,
+                         int_multiplicity_preCIN = int_multip_old,
+                         cn_change = CN.change,
+                         new_clone_ccf = new.clone.CCF )]
+  
+  return(data.)
+   
+}
+
 
 #' Clonal deconvolution function
 #' 
@@ -1067,7 +1262,6 @@ clonal_deconvolution <- function(data, hard_filters = NA, mrd_filters = NA, tree
   
   class_origin <- class( data )
   data <- as.data.table( data )
-  
   
   # make a mutation id
   data[, mutation_id := paste( sample_id, chr, pos, alt, sep = ":" ) ]
@@ -1090,7 +1284,7 @@ clonal_deconvolution <- function(data, hard_filters = NA, mrd_filters = NA, tree
   
   
   # calculate VAF
-  data[, VAF := supporting_reads / depth]
+  data[, VAF := supporting_reads / depth ]
 
   # calculate raw mutant CN, equation taken from NEJM TRACERx 100 paper (this is an 
   # average mut cn per cell across the tumour)
@@ -1102,8 +1296,8 @@ clonal_deconvolution <- function(data, hard_filters = NA, mrd_filters = NA, tree
   # multiplicity < 1 is not possible (causes by noise in data) - correct this
   data[ multiplicity < 1, multiplicity := 1 ]
   
-  # assign all mutations as matched LOD for now - will use this later
-  data$matched_lod <- TRUE
+  
+  
   
   # calculate the limit of detection for each variant based on cellularity that = 1 supporting read
   # will only compare LOD within a clone so CCF can be any value here
