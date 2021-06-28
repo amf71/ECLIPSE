@@ -363,16 +363,11 @@ extract_normalised_sd <- function(data., hard_filters, tumour_vaf_col = 'mean_tu
   data.[, vaf := get(varcount_col) / get(depth_col) ]
   
   data.[, high_quality := hard_filtered == FALSE & !is.na(int_multiplicity) & get(depth_col) > 0 ] 
-  data. <- rbindlist( lapply(data.[, unique(get(sample_id_col)) ], function(sample){ 
-    print(sample)
-    calc_purity(data.[ get(sample_id_col) == sample ],
-                vaf_col = 'vaf', 
-                quality_col = 'high_quality', 
-                normal_cn_col = normal_totcn_col, 
-                multiplicity_col = 'int_multiplicity', 
-                tumour_totcn_col = tumour_totcn_col, 
-                clonal_col = is_clonal_col ) 
-  } ) )
+  data.[, purity_est := calculate_purity( vaf_nobackground, 
+                                         get(tumour_totcn_col), get(normal_totcn_col),
+                                         int_multiplicity  ),  by = seq_len(nrow(data.)) ]
+  data.[, purity := mean( purity_est [ (is_clonal & high_quality) ] ), 
+       by = get(sample_id_col) ]
   
   # calculate ccf using NEJM formula
   data.[, ccf := calculate_ccf( vaf,  purity,
@@ -581,23 +576,10 @@ power_calc <- function( data., type, niose_col = 'background_error',
     lambda <- data.[ (get(filter_col) & get(clonal_col)), sum(get(niose_col)*get(depth_col))*num_muts_correction ]
     signifcant_vaf_95 <- data.[ (get(filter_col) & get(clonal_col)), qpois((1 - p_theshold), lambda = lambda) / (sum(get(depth_col))*num_muts_correction) ]
     
-    purity_est <- signifcant_vaf_95
-    
-    purity_out <- data[ (get(filter_col)) & get(clonal_col), 
-                        purity_func(  signifcant_vaf_95 , mean(get(normal_cn_col)),
-                                      mean(get(tumour_totcn_col)), mean(get(multiplicity_col)),
-                                      purity_est )  ]
-    if( purity_out > 0 ){
-      
-      while( abs( (purity_out - purity_est) / purity_est ) > 0.0001 ){
-        purity_est = purity_out
-        purity_out <- data[ (get(filter_col) & get(clonal_col)), 
-                            purity_func(  signifcant_vaf_95 , mean(get(normal_cn_col)),
-                                          mean(get(tumour_totcn_col)), mean(get(multiplicity_col)),
-                                          purity_est )  ]
-      }
-    }
-    power_95 <- purity_out
+    power_95 <- data[ (get(filter_col) & get(clonal_col)) , calculate_purity( signifcant_vaf_95, 
+                                           mean(get(tumour_totcn_col)) , mean(get(normal_totcn_col)),
+                                           mean(get(multiplicity_col)) ) ]
+
   }
   
   # ccf or purity can't be > 1 - limit as in exome pipeline
@@ -657,53 +639,20 @@ call_clonal <- function(data., data_col = 'ccf',
 
 
 #' function to estimate the purity using ccf equation for clonal variants
-#' This requires an intial 'purity estimate' which can initially be the vaf
-#' or 1 and then can recycle the ooutcome purity and repeat the function to
-#' get ever more accurate purities
+#' This uses a rearrangement of the equation to calculate ccfs which is validate
+#' for mutations we know have a ccf of 1 (those we think are clonal)
 #' @export
-purity_func <- function( vaf, normal_cn, total_cn, mulitplicity, purity_est ){
-  purity = (vaf / mulitplicity) * ( (total_cn * purity_est) + (normal_cn * (1 - purity_est)) )
-  return(purity)
-}
-
-#' Function to estimate our power to signifcantly () detect either sample purity (type = power_purity)
-#' clone ccf (type = power_clone_ccf) or the ccf of the average subclone in a sample (type = power_sample_ccf)
-#' based on the background niose, copy number status, depth of sequencing etc. Default is for detection at
-#' p = 0.05
-#' @export
-calc_purity <- function( data., vaf_col = 'vaf_nobackground', normal_cn_col = 'normal_cn',
-                        multiplicity_col = 'int_multiplicity', tumour_totcn_col = 'total_cpn',
-                        clonal_col = 'is_clonal', quality_col = 'high_quality' ){
+calculate_purity <- function(vaf, tumour_totalCN, normal_totalCN, multiplicity ){
   
-  if( data.[ (get(quality_col) & get(clonal_col)), .N == 0] ){
-    data.[, purity := NA ]
-    return(data.)
-  } 
+  # Sometimes after subsequent CN change a mutation can have multiplicity of 0 - can't calculate ccf for this
+  multiplicity <- ifelse( multiplicity == 0, NA, multiplicity)
   
-  
-  purity_est <- data.[ (get(clonal_col) & get(quality_col)), mean( get(vaf_col) ) ]
-
-  purity_out <- data.[ (get(clonal_col) & get(quality_col)), 
-                      mean( purity_func(  get(vaf_col) , get(normal_cn_col),
-                                          get(tumour_totcn_col), get(multiplicity_col),
-                                          purity_est ) )  ]
-  
-  if(purity_out > 0){
-    
-    # repeat until the percentage change in purity falls below 0.01%
-    while( abs( (purity_out - purity_est) / purity_est ) > 0.0001 ){
-      purity_est = purity_out
-      purity_out <- data.[ (get(clonal_col) & get(quality_col)), 
-                          mean( purity_func(  get(vaf_col) , get(normal_cn_col),
-                                              get(tumour_totcn_col), get(multiplicity_col),
-                                              purity_est ) )  ]
-    }
-    
+  # if we're missing any of this info (or if the purity is 0) then ccf can't be calculated
+  if( any(is.na(c(vaf, tumour_totalCN, normal_totalCN, multiplicity))) ){
+    return( as.numeric(NA) ) 
   }
   
-  data.[, purity := purity_out ]
-  
-  return(data.)
+  return( normal_totalCN / ( (multiplicity/vaf) - tumour_totalCN + normal_totalCN ) )
   
 }
 
@@ -778,17 +727,11 @@ clonal_deconvolution <- function(data, normalisedSD_max = 0.56, sample_id_col = 
   # low LOD variants after which we will recalculate it
   # int_multiplicity will be NA if we don't have CN data for this mutation - exclude
   data[, high_quality := get(hard_filtered_col) == FALSE & !is.na(int_multiplicity) ] 
-  data <- rbindlist( lapply(data[, unique(get(sample_id_col)) ], function(sample){ 
-    if( testing ) print(sample)
-    calc_purity(data[ get(sample_id_col) == sample ],
-                vaf_col = 'vaf_nobackground', 
-                quality_col = 'high_quality', 
-                normal_cn_col = normal_totcn_col, 
-                multiplicity_col = 'int_multiplicity', 
-                tumour_totcn_col = tumour_totcn_col, 
-                clonal_col = is_clonal_col ) 
-    } ) )
-  
+  data[, purity_est := calculate_purity( vaf_nobackground, 
+                               get(tumour_totcn_col), get(normal_totcn_col),
+                               get(multiplicity_col)  ),  by = seq_len(nrow(data)) ]
+  data[, purity := mean( purity_est [ (is_clonal & high_quality) ] ), 
+       by = get(sample_id_col) ]
   
   # calculate ccf using NEJM formula
   data[, ccf := calculate_ccf( vaf_nobackground,  purity,
@@ -860,16 +803,11 @@ clonal_deconvolution <- function(data, normalisedSD_max = 0.56, sample_id_col = 
          get(hard_filtered_col) == FALSE & !int_multiplicity == 0 & !is.na(int_multiplicity) ] 
   
   # Now work out the purity again using onlny good quality mutations
-  data <- rbindlist( lapply(data[, unique(get(sample_id_col)) ], function(sample){ 
-    if( testing ) print(sample)
-    calc_purity(data[ get(sample_id_col) == sample ],
-                vaf_col = 'vaf_nobackground', 
-                quality_col = 'high_quality', 
-                normal_cn_col = normal_totcn_col, 
-                multiplicity_col = 'int_multiplicity', 
-                tumour_totcn_col = tumour_totcn_col, 
-                clonal_col = is_clonal_col ) 
-    } ) )
+  data[, purity_est := calculate_purity( vaf_nobackground, 
+                                         get(tumour_totcn_col), get(normal_totcn_col),
+                                         get(multiplicity_col)  ),  by = seq_len(nrow(data)) ]
+  data[, purity := mean( purity_est [ (is_clonal & high_quality) ] ), 
+       by = get(sample_id_col) ]
   
   # and now recalculate the ccfs etc based on this more accurate purity
   # calculate ccf using NEJM formula
@@ -981,7 +919,8 @@ clonal_deconvolution <- function(data, normalisedSD_max = 0.56, sample_id_col = 
   
   # remove sample_clone col we made at the start & quality col
   data[, `:=`(sample_clone = NULL,
-              high_quality = NULL) ]
+              high_quality = NULL,
+              purity_est = NULL) ]
   
   # if data.frame was inputted then convert back
   if(!any(class_origin == 'data.table')) data <- as.data.frame(data)
