@@ -576,9 +576,9 @@ power_calc <- function( data., type, niose_col = 'background_error',
     lambda <- data.[ (get(filter_col) & get(clonal_col)), sum(get(niose_col)*get(depth_col))*num_muts_correction ]
     signifcant_vaf_95 <- data.[ (get(filter_col) & get(clonal_col)), qpois((1 - p_theshold), lambda = lambda) / (sum(get(depth_col))*num_muts_correction) ]
     
-    power_95 <- data[ (get(filter_col) & get(clonal_col)) , calculate_purity( signifcant_vaf_95, 
-                                           mean(get(tumour_totcn_col)) , mean(get(normal_totcn_col)),
-                                           mean(get(multiplicity_col)) ) ]
+    power_95 <- calculate_purity(signifcant_vaf_95, data.[(get(filter_col) & subset), mean(get(tumour_totcn_col), na.rm = T)],
+                              data.[(get(filter_col) & subset), mean(get(normal_cn_col))], 
+                              data.[(get(filter_col) & subset), mean(get(multiplicity_col), na.rm = T)])
 
   }
   
