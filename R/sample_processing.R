@@ -166,7 +166,7 @@ sumlog <- function(p) {
 #' @export
 correct_new_CIN <- function( data., varcount_col = 'supporting_reads', depth_col = 'depth', vaf_col = 'vaf_nobackground',
                              tumour_totalCN_col = 'total_cpn', multimodal_p_thes = 0.05,
-                             background_reads_col = 'background_error', filter_col = 'hard_filtered', multiplicity_col = 'int_multiplicity',
+                             background_reads_col = 'background_error', filter_col = 'hard_filtered', multiplicity_col = 'multiplicity',
                              normal_totcn_col = 'normal_cpn'){
   
   # mutations to ignore throughout
@@ -176,7 +176,7 @@ correct_new_CIN <- function( data., varcount_col = 'supporting_reads', depth_col
   if( all(ignore_i) ){
     data.[, `:=`(multi_modal_p = NA,
                  subsequecent_cin = FALSE, 
-                 int_multiplicity_preCIN = NA,
+                 multiplicity_preCIN = NA,
                  subsequent_amplfiication = NA, 
                  cn_change = NA,
                  new_clone_ccf = NA)]
@@ -212,7 +212,7 @@ correct_new_CIN <- function( data., varcount_col = 'supporting_reads', depth_col
   # If not multumodal then assign subsequecent_cin to F and add NA columns for other fields
   if( !is_multimodel ){
     data.[, `:=`(subsequecent_cin = FALSE, 
-                 int_multiplicity_preCIN = NA,
+                 multiplicity_preCIN = NA,
                  subsequent_amplfiication = NA, 
                  cn_change = NA,
                  new_clone_ccf = NA)]
@@ -327,7 +327,7 @@ correct_new_CIN <- function( data., varcount_col = 'supporting_reads', depth_col
   # add these info to the data
   data.[ !ignore_i, (multiplicity_col) := int_multip_new ]
   data.[ !ignore_i, `:=`(subsequecent_cin = TRUE, 
-                         int_multiplicity_preCIN = int_multip_old,
+                         multiplicity_preCIN = int_multip_old,
                          subsequent_amplfiication = is.na(int_multip_new), 
                          cn_change = CN.change,
                          new_clone_ccf = new.clone.ccf )]
@@ -358,14 +358,13 @@ extract_normalised_sd <- function(data., hard_filters, tumour_vaf_col = 'mean_tu
   data.[, multiplicity := mutCPN / get(tumour_ccf_col) ]
   # multiplicity < 1 is not possible (causes by noise in data) - correct this
   data.[ multiplicity < 1, multiplicity := 1 ]
-  data.[, int_multiplicity := round(multiplicity) ]
-  
+
   data.[, vaf := get(varcount_col) / get(depth_col) ]
   
-  data.[, high_quality := hard_filtered == FALSE & !is.na(int_multiplicity) & get(depth_col) > 0 ] 
+  data.[, high_quality := hard_filtered == FALSE & !is.na(get(multiplicity_col)) & get(depth_col) > 0 ] 
   data.[, purity_est := calculate_purity( vaf_nobackground, 
                                          get(tumour_totcn_col), get(normal_totcn_col),
-                                         int_multiplicity  ),  by = seq_len(nrow(data.)) ]
+                                         get(multiplicity_col)  ),  by = seq_len(nrow(data.)) ]
   data.[, purity := mean( purity_est [ (is_clonal & high_quality) ] ), 
        by = get(sample_id_col) ]
   
@@ -536,7 +535,7 @@ outlier_test <- function( data., data_col = 'cn_adj_vaf', LOD_col = 'cn_adj_vaf_
 #' @export
 power_calc <- function( data., type, niose_col = 'background_error',
                             filter_col = 'mrd_filtered', normal_cn_col = 'normal_cn', purity_col = 'purity',
-                            multiplicity_col = 'int_multiplicity', tumour_totcn_col = 'total_cpn', depth_col = 'depth',
+                            multiplicity_col = 'multiplicity', tumour_totcn_col = 'total_cpn', depth_col = 'depth',
                             clonal_col = 'is_clonal', p_theshold = 0.05, num_subclonal_mutations_sim = 5 ){
   
   # work out which mutations we want depending on the type of power analysis we're doing
@@ -716,17 +715,15 @@ clonal_deconvolution <- function(data, normalisedSD_max = 0.56, sample_id_col = 
   multiplicity_col = 'multiplicity'
   }
   # multiplicity < 1 is not possible (caused by noise in data) - correct this
-  # asit will cause issues downstream
-  # Average to integer multiplicity (as must be in reality) as done in Tx exome pipeline
+  # as it will cause issues downstream
   data[  get(multiplicity_col) < 1, (multiplicity_col) := 1 ]
-  data[, int_multiplicity := round(get(multiplicity_col)) ]
-  
+
   message( 'calculating ccfs..')
   
   # make a first attempt at purity estimation before we identify outliers & 
   # low LOD variants after which we will recalculate it
-  # int_multiplicity will be NA if we don't have CN data for this mutation - exclude
-  data[, high_quality := get(hard_filtered_col) == FALSE & !is.na(int_multiplicity) ] 
+  # multiplicity will be NA if we don't have CN data for this mutation - exclude
+  data[, high_quality := get(hard_filtered_col) == FALSE & !is.na(get(multiplicity_col)) ] 
   data[, purity_est := calculate_purity( vaf_nobackground, 
                                get(tumour_totcn_col), get(normal_totcn_col),
                                get(multiplicity_col)  ),  by = seq_len(nrow(data)) ]
@@ -797,10 +794,10 @@ clonal_deconvolution <- function(data, normalisedSD_max = 0.56, sample_id_col = 
   
   # now account for all the poor wuality mutations we have identified in the past
   # section
-  # int_multiplicity can be 0 or NA (when amplified to an unknown amount) if we've detected 
+  # get(multiplicity_col) can be 0 or NA (when amplified to an unknown amount) if we've detected 
   # subsequent cin - can't use these mutations
   data[, high_quality := matched_lod == TRUE & (is_outlier == FALSE | is.na(is_outlier)) & 
-         get(hard_filtered_col) == FALSE & !int_multiplicity == 0 & !is.na(int_multiplicity) ] 
+         get(hard_filtered_col) == FALSE & !get(multiplicity_col) == 0 & !is.na(get(multiplicity_col)) ] 
   
   # Now work out the purity again using onlny good quality mutations
   data[, purity_est := calculate_purity( vaf_nobackground, 
@@ -852,7 +849,7 @@ clonal_deconvolution <- function(data, normalisedSD_max = 0.56, sample_id_col = 
   message( 'performing power calculations..')
   
   data[, high_quality := get(hard_filtered_col) == FALSE & get(mrd_filtered_col) == FALSE & 
-                         !int_multiplicity == 0 & !is.na(int_multiplicity) & !is.na(get(niose_col))] 
+                         !get(multiplicity_col) == 0 & !is.na(get(multiplicity_col)) & !is.na(get(niose_col))] 
   
   ## Now do power calculations for each sample clone for what CCF would be detectable given the LOD
   ## Then calculate the equivalent for purity 
@@ -864,7 +861,7 @@ clonal_deconvolution <- function(data, normalisedSD_max = 0.56, sample_id_col = 
                 filter_col = 'high_quality', 
                 normal_cn_col = normal_totcn_col, 
                 purity_col = 'purity',
-                multiplicity_col = 'int_multiplicity', 
+                multiplicity_col = multiplicity_col, 
                 tumour_totcn_col = tumour_totcn_col, 
                 depth_col = depth_col,
                 clonal_col = is_clonal_col, 
@@ -879,7 +876,7 @@ clonal_deconvolution <- function(data, normalisedSD_max = 0.56, sample_id_col = 
                 filter_col = 'high_quality', 
                 normal_cn_col = normal_totcn_col, 
                 purity_col = 'purity',
-                multiplicity_col = 'int_multiplicity', 
+                multiplicity_col = multiplicity_col, 
                 tumour_totcn_col = tumour_totcn_col, 
                 depth_col = depth_col,
                 clonal_col = is_clonal_col,  
@@ -895,7 +892,7 @@ clonal_deconvolution <- function(data, normalisedSD_max = 0.56, sample_id_col = 
                 filter_col = 'high_quality', 
                 normal_cn_col = normal_totcn_col, 
                 purity_col = 'purity',
-                multiplicity_col = 'int_multiplicity', 
+                multiplicity_col = multiplicity_col, 
                 tumour_totcn_col = tumour_totcn_col, 
                 depth_col = depth_col,
                 clonal_col = is_clonal_col, 
