@@ -196,8 +196,9 @@ correct_new_CIN <- function( data., varcount_col = 'supporting_reads', depth_col
   # in the documentation - can't be 0 if we are to accurately combine p values
   multi_modal_p_cn1 <- ifelse(data.[!ignore_i & get(multiplicity_col) < 1.5, .N] < 20, 
                               NA, data.[ !ignore_i & get(multiplicity_col) < 1.5, max(1e-14, dip.test(vaf_lod)$p.value) ] )
-  multi_modal_p_cn2 <- ifelse(data.[!ignore_i & get(multiplicity_col) > 1.5, .N] < 20, 
-                              NA, data.[ !ignore_i & get(multiplicity_col) > 1.5, max(1e-14, dip.test(vaf_lod)$p.value) ] )
+  multi_modal_p_cn2 <- ifelse(data.[!ignore_i & get(multiplicity_col) > 1.5 & get(multiplicity_col) < 2.5, .N] < 20, 
+                              NA, data.[ !ignore_i & get(multiplicity_col) > 1.5 & get(multiplicity_col) < 2.5, 
+                                         max(1e-14, dip.test(vaf_lod)$p.value) ] )
   p_values <- c(multi_modal_p_cn1, multi_modal_p_cn2)
   p_values <- p_values[ !is.na(p_values) ]
   if(length(p_values) == 0) p_values <- NA
@@ -226,7 +227,8 @@ correct_new_CIN <- function( data., varcount_col = 'supporting_reads', depth_col
   # Replace unobserved variants (varcount = 0) with the LOD (ie 1/depth) for log transformation
   # and clustering
   vafs_lod <- data.[ !(ignore_i), ifelse(get(vaf_col) > 0, get(vaf_col), 1/get(depth_col) ) ]
-  int_multip_old <- data.[ !(ignore_i), get(multiplicity_col) ]
+  int_multip_old_float <- data.[ !(ignore_i), get(multiplicity_col) ]
+  int_multip_old <- round( int_multip_old_float )
   
   # Cluster the mutations into their modes using mcClust
   # capture.output to remove printed messages
@@ -274,6 +276,8 @@ correct_new_CIN <- function( data., varcount_col = 'supporting_reads', depth_col
     if(length(classcp1)>1){
       classcp1 <- classcp1[class_vaf[classes %in% classcp1] %in% max(class_vaf[unique(mode1$classification) %in% classcp1])][1]
       int_multip_new[classification==classes[classes==classcp1]] <- 1
+    } else {
+      int_multip_new[classification==classes[classes==classcp1]] <- 1
     }
     
     # Now we've got CN 1 then CN 2 must be one above that one in VAF
@@ -286,7 +290,7 @@ correct_new_CIN <- function( data., varcount_col = 'supporting_reads', depth_col
       # for the clustering to be accurate. Just give them NA CN (later we add a column indicating
       # that they have been amplified)
       if(!classcp2 == classes.vaf.ordered[ length(classes.vaf.ordered) ]){
-        classcpamp <- classes.vaf.ordered[ which( classes.vaf.ordered == classcp2 ):length(classes.vaf.ordered) ]
+        classcpamp <- classes.vaf.ordered[ (which( classes.vaf.ordered == classcp2 )+1):length(classes.vaf.ordered) ]
         int_multip_new[classification %in% classcpamp ] <- NA
       }
       
@@ -326,13 +330,13 @@ correct_new_CIN <- function( data., varcount_col = 'supporting_reads', depth_col
   
   # Work out what the CN change has been for each mutation (if any)
   int_multip_new_copy <- int_multip_new
-  int_multip_new_copy[ is.na(int_multip_new_copy) ] <- 3 # could be more this but will calculate the minimum CN gain for amplified mutations
+  int_multip_new_copy[ is.na(int_multip_new_copy) ] <- 3 # NA = amplifications, could be more than 3 but will calculate the minimum CN gain for amplified mutations
   CN.change <- as.numeric(int_multip_new_copy) - as.numeric(int_multip_old)
   
   # add these info to the data
   data.[ !ignore_i, (multiplicity_col) := int_multip_new ]
   data.[ !ignore_i, `:=`(subsequent_cin = TRUE, 
-                         multiplicity_preCIN = int_multip_old,
+                         multiplicity_preCIN = int_multip_old_float,
                          subsequent_amplfiication = is.na(int_multip_new), 
                          cn_change = CN.change,
                          new_clone_ccf = new.clone.ccf )]
@@ -682,7 +686,7 @@ clonal_deconvolution <- function(data, normalisedSD_max = 0.56, sample_id_col = 
   # assigning the mutations each mode thier new CN state
   data <- rbindlist( lapply(data[, unique(sample_clone) ], function(clone_name){ 
     if( testing ) print(clone_name)
-    correct_new_CIN(data[ sample_clone == clone_name ],
+    correct_new_CIN(data. = data[ sample_clone == clone_name ],
                     varcount_col = varcount_col, 
                     depth_col = depth_col, 
                     vaf_col = 'vaf_nobackground',
