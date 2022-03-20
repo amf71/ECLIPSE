@@ -7,7 +7,6 @@
 
 #' Function to remove the number of estimated supporting reads which derive from
 #' background sequencing niose for groups of mutations (in this case clones)
-#' @export
 remove_background_reads <- function( data., niose_col = 'background_error',
                                      filter_col = 'hard_filtered', varcount_col = 'supporting_reads',
                                      depth_col = 'depth', group_max = 4, mutid_col = 'mutation_id'){
@@ -163,7 +162,6 @@ sumlog <- function(p) {
 #' Sometimes, if mutation losses have occurred but not in all cells this 
 #' function can also estimate the ccf of the new clone which has emerged 
 #' with this CIN.
-#' @export
 correct_new_CIN <- function( data., varcount_col = 'supporting_reads', depth_col = 'depth', vaf_col = 'vaf_nobackground',
                              tumour_totalCN_col = 'total_cpn', multimodal_p_thes = 0.05,
                              background_reads_col = 'background_error', filter_col = 'hard_filtered', multiplicity_col = 'multiplicity',
@@ -349,10 +347,7 @@ correct_new_CIN <- function( data., varcount_col = 'supporting_reads', depth_col
   return(data.)
   
 }
-multiplicity_col = 'mean_multiplicity'; tumour_purity_col = 'mean_tumour_cellularity';
-tumour_totcn_col = 'total_cpn'; varcount_col = 'dao'; depth_col = 'ddp'; normal_totcn_col = 'normal_cpn';
-background_col = 'tnc_error_rate'; sample_id_col = 'tracerx_id'; tumour_ccf_col = 'mean_tumour_ccf';
-is_clonal_col = 'is_clonal'; filter_col = 'failed filters'
+
 #' Function to extract expected normalised SDs using clonal mutations and higher 
 #' ctDNA fraction samples
 #' @export
@@ -419,7 +414,6 @@ extract_normalised_sd <- function(data., hard_filters, multiplicity_col = 'mean_
 #' have an incoherent vaf distribution (ie probably not a true clone) because the normalised SD is still
 #' too high after removing 4 outliers (or if >50% of mutations are removed as outliers)
 #' The normalisedSD_max is claculated by applying the extract_normalised_sd to the whole cohort
-#' @export
 outlier_test <- function( data., normalisedSD_max, data_col = 'cn_adj_vaf', LOD_col = 'cn_adj_vaf_LOD', 
                           filter_col = 'hard_filtered',
                           outlier_perc_limit = 0.5, outlier_num_limit = 4 ){
@@ -465,7 +459,6 @@ outlier_test <- function( data., normalisedSD_max, data_col = 'cn_adj_vaf', LOD_
 #' clone ccf (type = 'power_clone_ccf') or the ccf of the average subclone in a sample (type = 'power_sample_ccf')
 #' based on the background noise, copy number status, depth of sequencing etc. Default is for detection at
 #' p = 0.01
-#' @export
 power_calc <- function( data., type, niose_col = 'background_error',
                             filter_col = 'mrd_filtered', normal_cn_col = 'normal_cn', purity_col = 'purity',
                             multiplicity_col = 'multiplicity', tumour_totcn_col = 'total_cpn', depth_col = 'depth',
@@ -573,7 +566,6 @@ call_clonal <- function(data., data_col = 'ccf',
 #' function to estimate the purity using ccf equation for clonal variants
 #' This uses a rearrangement of the equation to calculate ccfs which is validate
 #' for mutations we know have a ccf of 1 (those we think are clonal)
-#' @export
 calculate_purity <- function(vaf, tumour_totalCN, normal_totalCN, multiplicity ){
   
   # Sometimes after subsequent CN change a mutation can have multiplicity of 0 - can't calculate ccf for this
