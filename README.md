@@ -24,7 +24,7 @@ load package:
 library(cloneMap)
 ```
 
-##Data inputs for ECLIPSE 
+## Data inputs for ECLIPSE 
 
 For each mutation ECLIPSE requires:
 * mutation identifiers (Chromosome, position, reference allele, alternative allele)
@@ -47,7 +47,7 @@ distributions which may represent mutation clusters that are not true clones. Th
 The clone identifier, clonal vs subclonal status, mutation multiplicity and total copy number in tumour cells can be calculated using standard copy number extraction and clonal deconvolution methods (ASCAT, Battenberg, Pyclone, DpCLust) used for high tumour purity (>10%) samples, for example from tissue samples, which can then be used as estimates for these variables at the time of ctDNA sampling. Clonal status can be more accurately and comprehensively extracted from the sequencing of multiple high purity samples from the same patient, as is performed in TRACERx, but is not essential. See Application of ECLIPSE to the TRACERx cfDNA data section for further details. 
 
 
-##Stepwise description of ECLIPSE 
+## Stepwise description of ECLIPSE 
 
 1. **VAF denoising**. Variant allele frequencies (VAFs) are denoised by subtracting the estimated background error, provided to ECLIPSE for each variant. For a description of estimating background error in this dataset see MRD calling algorithm section. Variants in each clone are grouped into clusters (k-means clustering) with similar background error profiles where the number of groups is determined by the sum of the error estimated across all variants, so that if equally dividing the total error from all variants of a clone each group would have a combined error of at least one mutant read. Therefore, if a clone has a total combined error of less than two mutant reads only one cluster will be used. A maximum number of clusters is set to four as default which was used for this dataset. The average background error of each group per variant is subtracted from the number of supporting reads for all variants in each group and divided by the sequencing depth to calculate denoised VAFs. 
 2. **ctDNA tumour purity calculation**. Deniosed VAFs are used with mutation multiplicities, total copy number at the mutated locus and clonal vs subclonal mutation status for each mutation provided to ECLIPSE to calculate an estimate of ctDNA tumour purity (see above) using the equation shown in Supplementary Figure 3b for each clonal mutation. The equation shown in sup figure 3c is a rearrangement of that shown in sup figure 3c for clonal mutations where CCF = 1. We summarise the mean of these values to provide a final estimate of ctDNA tumour purity per sample. 
