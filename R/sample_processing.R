@@ -349,31 +349,27 @@ correct_new_CIN <- function( data., varcount_col = 'supporting_reads', depth_col
   return(data.)
   
 }
-
+multiplicity_col = 'mean_multiplicity'; tumour_purity_col = 'mean_tumour_cellularity';
+tumour_totcn_col = 'total_cpn'; varcount_col = 'dao'; depth_col = 'ddp'; normal_totcn_col = 'normal_cpn';
+background_col = 'tnc_error_rate'; sample_id_col = 'tracerx_id'; tumour_ccf_col = 'mean_tumour_ccf';
+is_clonal_col = 'is_clonal'; filter_col = 'failed filters'
 #' Function to extract expected normalised SDs using clonal mutations and higher 
 #' ctDNA fraction samples
 #' @export
-extract_normalised_sd <- function(data., hard_filters, tumour_vaf_col = 'mean_tumour_vaf', tumour_purity_col = 'mean_tumour_cellularity',
+extract_normalised_sd <- function(data., hard_filters, multiplicity_col = 'mean_multiplicity', tumour_purity_col = 'mean_tumour_cellularity',
                                   tumour_totcn_col = 'total_cpn', varcount_col = 'dao', depth_col = 'ddp', normal_totcn_col = 'normal_cpn',
                                   background_col = 'tnc_error_rate', sample_id_col = 'tracerx_id', tumour_ccf_col = 'mean_tumour_ccf',
-                                  is_clonal_col = 'is_clonal', filter_col = 'failed filters', quality_signal_niose = 10){
+                                  is_clonal_col = 'is_clonal', filter_col = 'failed filters'){
   
   data.[, hard_filtered := grepl( paste( hard_filters, collapse = "|" ), get(filter_col) ) | is.na(get(background_col)) ]
   
-  # calculate raw mutant CN, equation taken from NEJM TRACERx 100 paper (this is an 
-  # average mut cn per cell across the whole tumour)
-  data.[, mutCPN := (get(tumour_vaf_col) * (1 / get(tumour_purity_col))) * ((get(tumour_purity_col) * get(tumour_totcn_col)) + 2 * (1 - get(tumour_purity_col))) ]
-  
-  # calculate number of mutant copies per mutated cell (i/e. multiplicity of mutation)
-  data.[, multiplicity := mutCPN / get(tumour_ccf_col) ]
-  
   # multiplicity < 1 is not possible (caused by noise in data) - correct this
-  data.[ multiplicity < 1, multiplicity := 1 ]
+  data.[ get(multiplicity_col) < 1, (multiplicity_col) := 1 ]
 
   data.[, vaf := get(varcount_col) / get(depth_col) ]
   
   data.[, high_quality := hard_filtered == FALSE & !is.na(get(multiplicity_col)) & get(depth_col) > 0 ] 
-  data.[, purity_est := calculate_purity( vaf_nobackground, 
+  data.[, purity_est := calculate_purity( vaf, 
                                          get(tumour_totcn_col), get(normal_totcn_col),
                                          get(multiplicity_col)  ),  by = seq_len(nrow(data.)) ]
   data.[, purity := mean( purity_est [ (is_clonal & high_quality) ] ), 
@@ -382,9 +378,14 @@ extract_normalised_sd <- function(data., hard_filters, tumour_vaf_col = 'mean_tu
   # calculate ccf using NEJM formula
   data.[, ccf := calculate_ccf( vaf,  purity,
                                get(tumour_totcn_col), get(normal_totcn_col),
-                               get(multiplicity_col)  ),  by = seq_len(nrow(data)) ]
+                               get(multiplicity_col)  ),  by = seq_len(nrow(data.)) ]
+  data.[, ccf_lod := calculate_ccf( 1/get(depth_col),  purity,
+                                get(tumour_totcn_col), get(normal_totcn_col),
+                                get(multiplicity_col)  ),  by = seq_len(nrow(data.)) ]
   # get the clonal purity (/ CN adjusted vaf for each mutation)
   data.[, clonal_purity_mut := ccf * purity ]
+  data.[, clonal_purity_mut_lod := ccf_lod * purity ]
+  data.[ clonal_purity_mut == 0, clonal_purity_mut := clonal_purity_mut_lod]
   
   data.[ , mutation_present := ppois(get(varcount_col) - 1, (get(background_col)*get(depth_col)), lower.tail = FALSE) < 0.01 ]
   
@@ -393,32 +394,22 @@ extract_normalised_sd <- function(data., hard_filters, tumour_vaf_col = 'mean_tu
                    .(ctDNA_frac = mean(clonal_purity_mut, na.rm = TRUE),
                      background = mean( get(background_col) ),
                      sd = sd(clonal_purity_mut, na.rm = TRUE),
-                     perc_called_muts = sum(mutation_present)/.N ),
-                   by = get(sample_id_col) ][, `:=`(signal = ctDNA_frac / background,
+                     perc_called_muts = sum(mutation_present)/.N,
+                     num_called_muts = sum(mutation_present) ),
+                   by = .(get(sample_id_col)) ][, `:=`(signal = ctDNA_frac / background,
                                                     normsd = sd / ctDNA_frac ) ]
   
-  
-  
-  # restrict to clones where all mutations are observed if there enough
-  if( clones[ perc_called_muts == 1, .N > 4 ]) clones <- clones[ perc_called_muts == 1 ]
-  
-  # Make sure no correlation between signal and normalised SD at this threshold - if so suggests LOD is 
-  # effecting the normalised SD hence repeatedly increase the theshold by 20% to remove any such cases
-  # until there is no correlation
-  is_corrleated <- clones[ signal > quality_signal_niose, cor.test(log10(signal), normsd)$p.value < 0.05 ]
-  while( is_corrleated ){
-    quality_signal_niose <- quality_signal_niose * 1.2
-    is_corrleated <- clones[ signal > quality_signal_niose, cor.test(log10(signal), normsd)$p.value < 0.05 ]
-  }
+  clones[, quality := perc_called_muts > 0.25 & num_called_muts > 5 ]
   
   # calculate confidence intervals for expected normalised SD for clones in this data
   # hci95 should be used as normalisedSD_max in the outlier_test function
-  hci95 <- clones[ signal > quality_signal_niose, mean(normsd) + (1.96 * sd(normsd)) ]
-  lci95 <- clones[ signal > quality_signal_niose, mean(normsd) + (-1.96 * sd(normsd)) ]
-  normsd <- clones[ signal > quality_signal_niose, mean(normsd) ]
+  hci95 <- clones[ (quality) , mean(normsd) + (1.96 * sd(normsd)) ]
+  lci95 <- clones[ (quality) , mean(normsd) + (-1.96 * sd(normsd)) ]
+  lci95 <- ifelse(lci95<0, 0, lci95)
+  normsd <- clones[ (quality) , mean(normsd) ]
   
-  out <- c(normsd, lci95, hci95, clones[ signal > quality_signal_niose, .N], quality_signal_niose)
-  names(out) <- c('mean_normsd', 'lci95', 'hci95', 'num_qual_clones', 'signal_to_niose_qual_theshold')
+  out <- c(normsd, lci95, hci95, clones[ (quality), .N])
+  names(out) <- c('mean_normsd', 'lci95', 'hci95', 'num_qual_clones')
   
   return(out)
   
@@ -713,7 +704,7 @@ clonal_deconvolution <- function(data, normalisedSD_max = 0.56, sample_id_col = 
   # (see the extract_normalised_sd function which should be applied to data from a whole cohort)
   data <- rbindlist( lapply(data[, unique(sample_clone) ], function(clone_name){ 
     if( testing ) print(clone_name)
-    outlier_test( data[ sample_clone == clone_name ], 
+    outlier_test( data. = data[ sample_clone == clone_name ], 
                  data_col = 'clonal_purity_mut', 
                  LOD_col = 'clonal_purity_mut_LOD', 
                  normalisedSD_max = normalisedSD_max, 
@@ -722,7 +713,7 @@ clonal_deconvolution <- function(data, normalisedSD_max = 0.56, sample_id_col = 
   
   message( 'determining clone ccfs..')
   
-  # now account for all the poor wuality mutations we have identified in the past
+  # now account for all the poor quality mutations we have identified in the past
   # section
   # get(multiplicity_col) can be 0 or NA (when amplified to an unknown amount) if we've detected 
   # subsequent cin - can't use these mutations
@@ -857,12 +848,12 @@ clonal_deconvolution <- function(data, normalisedSD_max = 0.56, sample_id_col = 
 #=====#
 # END #
 #=====#
-
-normalisedSD_max = 0.56; sample_id_col = 'tracerx_id'; niose_col = 'tnc_error_rate';
-chromosome_col = 'chromosome'; position_col = 'position'; alt_base_col = 'alternate';
-varcount_col = 'dao'; depth_col = 'ddp'; clone_col = paste("PyCloneCluster", pyclone_type, sep = '_');
-is_clonal_col = 'is_clonal'; tumour_vaf_col = 'mean_tumour_vaf';
-tumour_totcn_col = 'tumour_total_cpn'; normal_totcn_col = 'normal_total_cpn';
-tumour_purity = 'mean_tumour_cellularity'; tumour_ccf_col = 'mean_tumour_ccf';
-hard_filtered_col = 'hard_filtered'; mrd_filtered_col = 'mrd_filtered'
-multiplicity_col = NA; testing = T
+# 
+# normalisedSD_max = 0.56; sample_id_col = 'tracerx_id'; niose_col = 'tnc_error_rate';
+# chromosome_col = 'chromosome'; position_col = 'position'; alt_base_col = 'alternate';
+# varcount_col = 'dao'; depth_col = 'ddp'; clone_col = paste("PyCloneCluster", pyclone_type, sep = '_');
+# is_clonal_col = 'is_clonal'; tumour_vaf_col = 'mean_tumour_vaf';
+# tumour_totcn_col = 'tumour_total_cpn'; normal_totcn_col = 'normal_total_cpn';
+# tumour_purity = 'mean_tumour_cellularity'; tumour_ccf_col = 'mean_tumour_ccf';
+# hard_filtered_col = 'hard_filtered'; mrd_filtered_col = 'mrd_filtered'
+# multiplicity_col = NA; testing = T
