@@ -9,13 +9,13 @@
 You can use devtools::install_github() to install cloneMap from this repository:
 
 ```R
-devtools::install_github("amf71/cloneMap")`
+devtools::install_github("amf71/ECLIPSE")`
 ```
 
 load package:
 
 ```R
-library(cloneMap)
+library(eclipse)
 ```
 
 ## Data inputs for ECLIPSE 
