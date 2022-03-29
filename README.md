@@ -7,9 +7,10 @@
 ## Installation & loading
 
 You can use devtools::install_github() to install cloneMap from this repository:
+Temporary authenication token for reviewers included
 
 ```R
-devtools::install_github("amf71/ECLIPSE")`
+devtools::install_github('amf71/ECLIPSE',auth_token = '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')`
 ```
 
 load package:
