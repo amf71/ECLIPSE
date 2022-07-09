@@ -2,14 +2,15 @@
 
 **ECLIPSE (Extraction of Clonality from LIquid bioPSiEs)** is an R package for clonal deconvolution of tumour-informed ctDNA data using clonality  and copy number information from tumour tissue. It allows calculation of changes in cancer cell fraction (growth and death) of subclones that have been found in tumour tissue samples. It also calculates measure of tumour burden in a patient which is independent of the copy number state of the targeted variants ( ie sample purity/cellularity ) and hence is comparable across different tumours which may have significant differences in DNA content per cell (for example if whole genome doubling has occurred). The package is designed and has been validated using high quality deep targeted multiplex-archored PCR sequencing of variants from multi-region exome sequencing of NCLSCs as part of the TRACERx project. In this dataset set ECLIPSE has been effective in samples with at least 0.1% purity, greatly extending the number of samples where by clonal deconvolution would be possible using deep exome-seq and informatic methods such as PyClone.
 
-![](data-raw/ECLPSE_infographic.png)
+![](data-raw/ECLPSE_infographic.jpg)
 
 ## Installation & loading
 
-You can use devtools::install_github() to install cloneMap from this repository:
+You can use devtools::install_github() to install ECLIPSE from this repository:
+Temporary authenication token for reviewers included
 
 ```R
-devtools::install_github("amf71/ECLIPSE")`
+devtools::install_github('amf71/ECLIPSE',auth_token = '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')`
 ```
 
 load package:
