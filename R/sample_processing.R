@@ -593,7 +593,7 @@ clonal_deconvolution <- function(data, normalisedSD_max = 0.56, sample_id_col = 
                                  tumour_totcn_col = 'total_cpn', normal_totcn_col = 'normal_cpn',
                                  tumour_purity = 'tumour_cellularity', tumour_ccf_col = 'tumour_ccf', 
                                  hard_filtered_col = NA, mrd_filtered_col = NA, multiplicity_col = NA,
-                                 testing = FALSE ){
+                                 testing = FALSE, background_groups_max = 4 ){
   
   class_origin <- class( data )
   data <- as.data.table( data )
@@ -603,6 +603,13 @@ clonal_deconvolution <- function(data, normalisedSD_max = 0.56, sample_id_col = 
   
   # allow to run for multiple samples if inputted as 1 data table
   data[, sample_clone := paste( get(sample_id_col), get(clone_col), sep = "_") ]
+  
+  ## ensure the required columns are numeric
+  num_cols <- c(varcount_col, depth_col, tumour_totcn_col, normal_totcn_col, multiplicity_col, niose_col)
+  data[, (num_cols) := lapply(.SD, as.numeric), .SDcols = num_cols]
+  if( is.na(multiplicity_col)){
+  
+  }
   
   # if filter cols are left NA then just use all mutations
   if( all( is.na(hard_filtered_col) ) ){  data[, hard_filtered := FALSE ] ; hard_filtered_col = 'hard_filtered' }
@@ -620,7 +627,7 @@ clonal_deconvolution <- function(data, normalisedSD_max = 0.56, sample_id_col = 
                             niose_col = niose_col,
                             filter_col = hard_filtered_col, 
                             varcount_col = varcount_col,
-                            depth_col = depth_col, group_max = 4, 
+                            depth_col = depth_col, group_max = background_groups_max, 
                             mutid_col = 'mutation_id') 
     } ) )
   
@@ -634,10 +641,14 @@ clonal_deconvolution <- function(data, normalisedSD_max = 0.56, sample_id_col = 
   # Option to supply the mulitplciity directly to tool but if multiplicity_col = NA 
   # tool will calclate it as above
   if( is.na(multiplicity_col) ){
-  data[, mutCPN := (get(tumour_vaf_col) * (1 / get(tumour_purity))) * ((get(tumour_purity) * get(tumour_totcn_col)) + get(normal_totcn_col) * (1 - get(tumour_purity))) ]
-  # calculate number of mutant copies per mutated cell (i/e. multiplicity of mutation)
-  data[, multiplicity := mutCPN / get(tumour_ccf_col) ]
-  multiplicity_col = 'multiplicity'
+    ## ensure the required columns are numeric
+    num_cols <- c(tumour_purity, tumour_vaf_col, tumour_ccf_col)
+    data[, (num_cols) := lapply(.SD, as.numeric), .SDcols = num_cols]
+    
+    data[, mutCPN := (get(tumour_vaf_col) * (1 / get(tumour_purity))) * ((get(tumour_purity) * get(tumour_totcn_col)) + get(normal_totcn_col) * (1 - get(tumour_purity))) ]
+    # calculate number of mutant copies per mutated cell (i/e. multiplicity of mutation)
+    data[, multiplicity := mutCPN / get(tumour_ccf_col) ]
+    multiplicity_col = 'multiplicity'
   }
   # multiplicity < 1 is not possible (caused by noise in data) - correct this
   # as it will cause issues downstream
@@ -663,22 +674,22 @@ clonal_deconvolution <- function(data, normalisedSD_max = 0.56, sample_id_col = 
   data[, clonal_purity_mut := ccf * purity ]
   
   message( 'correcting for subsequent CIN..')
-  
+
   # correct for any subsequent CIN where it is very obvious by detecting
-  # multimodal distributions in mutations that should be the same CN and 
+  # multimodal distributions in mutations that should be the same CN and
   # assigning the mutations each mode thier new CN state
-  data <- rbindlist( lapply(data[, unique(sample_clone) ], function(clone_name){ 
+  data <- rbindlist( lapply(data[, unique(sample_clone) ], function(clone_name){
     if( testing ) print(clone_name)
     correct_new_CIN(data. = data[ sample_clone == clone_name ],
-                    varcount_col = varcount_col, 
-                    depth_col = depth_col, 
+                    varcount_col = varcount_col,
+                    depth_col = depth_col,
                     vaf_col = 'vaf_nobackground',
-                    tumour_totalCN_col = tumour_totcn_col, 
+                    tumour_totalCN_col = tumour_totcn_col,
                     multimodal_p_thes = 0.05,
-                    background_reads_col = niose_col, 
-                    filter_col = hard_filtered_col, 
+                    background_reads_col = niose_col,
+                    filter_col = hard_filtered_col,
                     multiplicity_col = multiplicity_col,
-                    normal_totcn_col = normal_totcn_col) 
+                    normal_totcn_col = normal_totcn_col)
     } ) )
 
   message( 'estimating limit of detection..')
