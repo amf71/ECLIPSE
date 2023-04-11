@@ -5,7 +5,7 @@ PLEASE READ THESE LICENCE TERMS CAREFULLY
 This licence agreement (Licence) is a legal agreement between you (Licensee or you) and Cancer Research Technology Limited, trading as Cancer Research Horizons, a company registered in England and Wales (registered number 1626049) whose registered office is at 2 Redman Place, Stratford, London, E20 1JQ (Licensor, us or we) for:
 ·	the ECLIPSE software, proprietary software developed in connection with a novel high sensitivity liquid biopsy tool to track cancer evolution, and including any improvements, modifications, updates, upgrades and/or new releases provided by Licensor under this Agreement (Software).
 We license use of the Software to you on the basis of this Licence. We do not sell the Software to you. We remain the owners of the Software and all intellectual property rights in it at all times. 
-By downloading, installing or using this Software, you agree to be bound by the terms of this Licence (included in the “non-commercial-academic-license.exe” file, available in the main directory of the Software repository). 
+By downloading, installing or using this Software, you agree to be bound by the terms of this Licence (included in the “non-commercial-academic-license” file, available in the main directory of the Software repository). 
 1.	LICENCE
 1.1	In consideration of you agreeing to abide by the terms of this Licence, the Licensor hereby grants to you a non-exclusive, non-transferable, royalty-free licence to use the Software on the terms of this Licence.
 1.2	You may install and use the Software for your personal academic non-commercial research purposes only. 
