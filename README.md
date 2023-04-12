@@ -46,11 +46,14 @@ The clone identifier, clonal vs subclonal status, mutation multiplicity and tota
 ### Run on example data (loaded with package)
 
 ```R
+library(data.table)
+
 # Assign mutations which should be filtered for subclone detection calls (may want to remove high noise variants- mrd filter) and which should also be filtered for CCF calculations (hard filtered). If no depth or background noise calculation wasn't possible then hard filter in the case of the TRACERx data
 hard_filters <- c( "primer_abundance_filter", "primer_strand_bias", 'sequence_strand_bias', 'dro_cutoff', 'dao_imbalance' )
 mrd_filters <- c( "tnc_error_rate" )
 
 # TRACERx_input file loaded with package (50Mb)
+TRACERx_input <- as.data.table(TRACERx_input)
 TRACERx_input[, hard_filtered := grepl( paste( hard_filters, collapse = "|" ), `failed filters` ) | is.na(tnc_error_rate) | ddp == 0 ]
 TRACERx_input[, mrd_filtered := grepl( paste( mrd_filters, collapse = "|" ), `failed filters` ) | is.na(tnc_error_rate) | ddp == 0 ]
 
