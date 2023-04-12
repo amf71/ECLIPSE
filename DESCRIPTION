@@ -19,4 +19,5 @@ Imports:
 	diptest,
 	mclust,
 	broom
-
+Depends: 
+    R (>= 2.10)
