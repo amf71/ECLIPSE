@@ -49,21 +49,23 @@ The clone identifier, clonal vs subclonal status, mutation multiplicity and tota
 # Assign mutations which should be filtered for subclone detection calls (may want to remove high noise variants- mrd filter) and which should also be filtered for CCF calculations (hard filtered). If no depth or background noise calculation wasn't possible then hard filter in the case of the TRACERx data
 hard_filters <- c( "primer_abundance_filter", "primer_strand_bias", 'sequence_strand_bias', 'dro_cutoff', 'dao_imbalance' )
 mrd_filters <- c( "tnc_error_rate" )
-input_data[, hard_filtered := grepl( paste( hard_filters, collapse = "|" ), `failed filters` ) | is.na(tnc_error_rate) | ddp == 0 ]
-input_data[, mrd_filtered := grepl( paste( mrd_filters, collapse = "|" ), `failed filters` ) | is.na(tnc_error_rate) | ddp == 0 ]
+
+# TRACERx_input file loaded with package (50Mb)
+TRACERx_input[, hard_filtered := grepl( paste( hard_filters, collapse = "|" ), `failed filters` ) | is.na(tnc_error_rate) | ddp == 0 ]
+TRACERx_input[, mrd_filtered := grepl( paste( mrd_filters, collapse = "|" ), `failed filters` ) | is.na(tnc_error_rate) | ddp == 0 ]
 
 # Presume that the normal total copy number state for all mutations is 2
-input_data[, normal_total_cpn := 2 ]
+TRACERx_input[, normal_total_cpn := 2 ]
 
 # calculate norm SD limit for clone quality threshold
-normsd <- extract_normalised_sd(input_data, sample_id_col = 'sample_id', hard_filters = hard_filters, 
+normsd <- extract_normalised_sd(TRACERx_input, sample_id_col = 'sample_id', hard_filters = hard_filters, 
                                 tumour_totcn_col = 'tumour_total_cpn', normal_totcn_col = 'normal_total_cpn')
 
 # run just for CRUK0484 for speed
-input_data <- input_data[ grepl('CRUK0484', sample_id) ]
+input_CRUK0484 <- TRACERx_input[ grepl('CRUK0484', sample_id) ]
 
 # Run
-CRUK0484_output <- clonal_deconvolution(data = input_data, normalisedSD_max = normsd['hci95'], sample_id_col = 'sample_id', niose_col = 'tnc_error_rate', 
+CRUK0484_output <- clonal_deconvolution(data = input_CRUK0484, normalisedSD_max = normsd['hci95'], sample_id_col ='sample_id', niose_col= 'tnc_error_rate', 
                                          chromosome_col = 'chromosome', position_col = 'position', alt_base_col = 'alternate', 
                                          varcount_col = 'dao', depth_col = 'ddp', clone_col = 'PyCloneCluster_SC', 
                                          is_clonal_col = 'is_clonal', multiplicity_col = 'mean_multiplicity',
