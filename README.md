@@ -2,10 +2,6 @@
 
 **ECLIPSE (Extraction of Clonality from LIquid bioPSiEs)** is an R package for clonal deconvolution of tumour-informed ctDNA data using clonality  and copy number information from tumour tissue. It allows calculation of changes in cancer cell fraction (growth and death) of subclones that have been found in tumour tissue samples. It also calculates measure of tumour burden in a patient which is independent of the copy number state of the targeted variants ( ie sample purity/cellularity ) and hence is comparable across different tumours which may have significant differences in DNA content per cell (for example if whole genome doubling has occurred). The package is designed and has been validated using high quality deep targeted multiplex-archored PCR sequencing of variants from multi-region exome sequencing of NCLSCs as part of the TRACERx project. In this dataset set ECLIPSE has been effective in samples with at least 0.1% purity, greatly extending the number of samples where by clonal deconvolution would be possible using deep exome-seq and informatic methods such as PyClone. The ECLIPSE software can only be downloaded for academic non-commercial research purposes.
 
-This software and associated documentation files (the “Software”) are protected by copyright. This Software is provided “as is” (at your own risk) for internal non-commercial academic research purposes only. Please read the Non-Commercial Academic License in detail before downloading a copy. By installing or using this Software, you agree to be bound by the terms and conditions of the Non-Commercial Academic License (included in the “non-commercial-academic-license” file, available in the main directory of this software repository). 
-
-All commercial use of the Software or any modification, manipulation or derivative of the Software, including but not limited to transfer, sale or licenceto a commercial third party or use on behalf of a commercial third party (including but not limited to use as part of a service supplied to any third party for financial reward) is strictly prohibited and requires a commercial use licence. For further information please email commercial@cancer.org.uk
-
 ![](data-raw/ECLPSE_infographic.jpg)
 
 ## Installation & loading
@@ -93,6 +89,9 @@ CRUK0484_output <- clonal_deconvolution(data = input_CRUK0484, normalisedSD_max 
 10. **Testing for the absence of a complete clonal sweep for each subclone**. A subclone which is detected in high purity samples used for mutation clustering may expand through a full clonal sweep later in the disease course. We would therefore expect to observe CCFs of 100%, indistinguishable from CCFs of clonal mutations after such an event. For each subclone in each sample, a Wilcoxon test is performed to compare the CCFs of each subclone to the CCFs of clonal mutations in the same sample. The resulting P value indicates whether there is significant evidence that the subclone has significantly <100% CCF and therefore is only present in the minority of tumour cells, without a full clonal sweep. 
 
 
+This software and associated documentation files (the “Software”) are protected by copyright. This Software is provided “as is” (at your own risk) for internal non-commercial academic research purposes only. Please read the Non-Commercial Academic License in detail before downloading a copy. By installing or using this Software, you agree to be bound by the terms and conditions of the Non-Commercial Academic License (included in the “non-commercial-academic-license” file, available in the main directory of this software repository). 
+
+All commercial use of the Software or any modification, manipulation or derivative of the Software, including but not limited to transfer, sale or licenceto a commercial third party or use on behalf of a commercial third party (including but not limited to use as part of a service supplied to any third party for financial reward) is strictly prohibited and requires a commercial use licence. For further information please email commercial@cancer.org.uk
 
 
 
