@@ -2,6 +2,12 @@
 
 **ECLIPSE (Extraction of Clonality from LIquid bioPSiEs)** is an R package for clonal deconvolution of tumour-informed ctDNA data using clonality  and copy number information from tumour tissue. It allows calculation of changes in cancer cell fraction (growth and death) of subclones that have been found in tumour tissue samples. It also calculates measure of tumour burden in a patient which is independent of the copy number state of the targeted variants ( ie sample purity/cellularity ) and hence is comparable across different tumours which may have significant differences in DNA content per cell (for example if whole genome doubling has occurred). The package is designed and has been validated using high quality deep targeted multiplex-archored PCR sequencing of variants from multi-region exome sequencing of NCLSCs as part of the TRACERx project. In this dataset set ECLIPSE has been effective in samples with at least 0.1% purity, greatly extending the number of samples where by clonal deconvolution would be possible using deep exome-seq and informatic methods such as PyClone. The ECLIPSE software can only be downloaded for academic non-commercial research purposes.
 
+This software and associated documentation files (the “Software”) are protected by copyright. This Software is provided “as is” (at your own risk) for internal non-commercial academic research purposes only. Please read the Non-Commercial Academic License in detail before downloading a copy. By installing or using this Software, you agree to be bound by the terms and conditions of the Non-Commercial Academic License (included in the “non-commercial-academic-license” file, available in the main directory of this software repository). 
+
+All commercial use of the Software or any modification, manipulation or derivative of the Software, including but not limited to transfer, sale or licence to a commercial third party or use on behalf of a commercial third party (including but not limited to use as part of a service supplied to any third party for financial reward) is strictly prohibited and requires a commercial use licence. For further information please email commercial@cancer.org.uk
+![image](https://user-images.githubusercontent.com/27453544/231467679-03264d04-cce6-4482-b23c-59f50cf8e3fd.png)
+
+
 ![](data-raw/ECLPSE_infographic.jpg)
 
 ## Installation & loading
