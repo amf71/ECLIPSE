@@ -1,6 +1,6 @@
 Package: eclipse
 Title: Clonal deconvolution of low purity tumour samples (eg cell free DNA samples) with deep targeted sequencing of known variants
-Version: 0.0.0.9000
+Version: 1.0
 Authors@R: 
     person(given = "Alexander",
            family = "Frankell",
@@ -19,5 +19,10 @@ Imports:
 	diptest,
 	mclust,
 	broom
-Depends: 
+Depends:
+    data.table,
+    dplyr,
+    diptest,
+    mclust,
+    broom, 
     R (>= 2.10)
