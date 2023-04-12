@@ -42,6 +42,36 @@ distributions which may represent mutation clusters that are not true clones. Th
 The clone identifier, clonal vs subclonal status, mutation multiplicity and total copy number in tumour cells can be calculated using standard copy number extraction and clonal deconvolution methods (ASCAT, Battenberg, Pyclone, DpCLust) used for high tumour purity (>10%) samples, for example from tissue samples, which can then be used as estimates for these variables at the time of ctDNA sampling. Clonal status can be more accurately and comprehensively extracted from the sequencing of multiple high purity samples from the same patient, as is performed in TRACERx, but is not essential. See Application of ECLIPSE to the TRACERx cfDNA data section for further details. 
 
 
+## Example Run
+### Run on example data (loaded with package)
+
+```R
+# Assign mutations which should be filtered for subclone detection calls (may want to remove high noise variants- mrd filter) and which should also be filtered for CCF calculations (hard filtered). If no depth or background noise calculation wasn't possible then hard filter in the case of the TRACERx data
+hard_filters <- c( "primer_abundance_filter", "primer_strand_bias", 'sequence_strand_bias', 'dro_cutoff', 'dao_imbalance' )
+mrd_filters <- c( "tnc_error_rate" )
+input_data[, hard_filtered := grepl( paste( hard_filters, collapse = "|" ), `failed filters` ) | is.na(tnc_error_rate) | ddp == 0 ]
+input_data[, mrd_filtered := grepl( paste( mrd_filters, collapse = "|" ), `failed filters` ) | is.na(tnc_error_rate) | ddp == 0 ]
+
+# Presume that the normal total copy number state for all mutations is 2
+input_data[, normal_total_cpn := 2 ]
+
+# calculate norm SD limit for clone quality threshold
+normsd <- extract_normalised_sd(input_data, sample_id_col = 'sample_id', hard_filters = hard_filters, 
+                                tumour_totcn_col = 'tumour_total_cpn', normal_totcn_col = 'normal_total_cpn')
+
+# run just for CRUK0484 for speed
+input_data <- input_data[ grepl('CRUK0484', sample_id) ]
+
+# Run
+CRUK0484_output <- clonal_deconvolution(data = input_data, normalisedSD_max = normsd['hci95'], sample_id_col = 'sample_id', niose_col = 'tnc_error_rate', 
+                                         chromosome_col = 'chromosome', position_col = 'position', alt_base_col = 'alternate', 
+                                         varcount_col = 'dao', depth_col = 'ddp', clone_col = 'PyCloneCluster_SC', 
+                                         is_clonal_col = 'is_clonal', multiplicity_col = 'mean_multiplicity',
+                                         tumour_totcn_col = 'tumour_total_cpn', normal_totcn_col = 'normal_total_cpn', 
+                                         hard_filtered_col = 'hard_filtered', mrd_filtered_col = 'mrd_filtered')
+
+```
+
 ## Stepwise description of ECLIPSE 
 
 1. **VAF denoising**. Variant allele frequencies (VAFs) are denoised by subtracting the estimated background error, provided to ECLIPSE for each variant. For a description of estimating background error in this dataset see MRD calling algorithm section. Variants in each clone are grouped into clusters (k-means clustering) with similar background error profiles where the number of groups is determined by the sum of the error estimated across all variants, so that if equally dividing the total error from all variants of a clone each group would have a combined error of at least one mutant read. Therefore, if a clone has a total combined error of less than two mutant reads only one cluster will be used. A maximum number of clusters is set to four as default which was used for this dataset. The average background error of each group per variant is subtracted from the number of supporting reads for all variants in each group and divided by the sequencing depth to calculate denoised VAFs. 
