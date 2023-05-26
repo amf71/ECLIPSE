@@ -39,6 +39,7 @@ Except as expressly set out in this Licence or as permitted by any local law, yo
 (b)	any indirect or consequential loss or damage of any kind howsoever arising and whether caused by tort (including negligence), breach of contract or otherwise, whether or not such loss or damage is foreseeable, foreseen or known.
 4.3	You acknowledge that the Software has not been developed to meet your individual requirements, and use of the Software is at your own risk.
 4.4	You acknowledge that nothing in this Licence obliges the Licensor to provide you with any replacement Software, media, documentation or Software updates or maintenance or support. 
+4.5	You acknowledge that nothing in this Licence obliges the Licensor to provide you with, or constitutes any licence to, any third party software or other third party intellectual property rights. If any licence to any third party software and/or other third party intellectual property rights is required in order to use the Software, it is your responsibility to obtain such licence.  
 5.	Termination
 5.1	We and you may terminate this Licence immediately for any reason by written notice to the other. 
 5.2	Upon termination for any reason:
